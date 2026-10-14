@@ -15,6 +15,8 @@ const rank = @import("find/rank.zig").rank;
 const width = if (builtin.cpu.arch == .x86_64 and builtin.cpu.has(.x86, .avx2)) 32 else 16;
 const tiny_haystack = 64;
 const packed_max = 32;
+// A difference of 16 permits 17 starts, including the initial equality check.
+const few_starts_max_difference = 16;
 const min_skips = 50;
 const min_skip_bytes = 8;
 
@@ -25,6 +27,18 @@ pub fn find(haystack: []const u8, needle: []const u8) ?usize {
     if (needle.len == haystack.len) return if (equal(haystack, needle)) 0 else null;
     if (needle.len == 1) return findByte(haystack, needle[0]);
     if (haystack.len < tiny_haystack) return rabinKarp(haystack, needle);
+    if (needle.len > packed_max) {
+        // Avoid one-shot preprocessing when a bounded full comparison suffices.
+        if (equal(haystack[0..needle.len], needle)) return 0;
+        const last = haystack.len - needle.len;
+        if (last <= few_starts_max_difference) {
+            var pos: usize = 1;
+            while (pos <= last) : (pos += 1) {
+                if (equal(haystack[pos..][0..needle.len], needle)) return pos;
+            }
+            return null;
+        }
+    }
     const pair = selectPair(needle);
     return if (needle.len <= packed_max)
         packedSearch(haystack, needle, pair)
@@ -540,4 +554,90 @@ test "lane masks preserve ascending memory order" {
     }
     bytes[32] = 1;
     try testing.expectEqual(@as(?usize, 31), findByte(&bytes, 1));
+}
+
+test "long one-shot all legal starts threshold and independent alignments" {
+    var hstorage: [4097 + 33 + 63]u8 = undefined;
+    var nstorage: [4097 + 63]u8 = undefined;
+    const offsets = [_]usize{ 0, 1, 15, 16, 31, 32, 63 };
+    for ([_]usize{ 32, 33, 63, 64, 65, 4095, 4096, 4097 }) |nlen| {
+        for (offsets) |hoff| {
+            for (offsets) |noff| {
+                const ns = nstorage[noff..][0..nlen];
+                @memset(ns, 'a');
+                ns[0] = 0;
+                ns[nlen - 1] = 'b';
+                // Also cross the tiny-haystack boundary for 32/33-byte needles.
+                for ([_]usize{ 0, 1, 2, 15, 16, 17, 18, 31, 32, 33 }) |difference| {
+                    const hs = hstorage[hoff..][0 .. nlen + difference];
+                    for (0..difference + 1) |pos| {
+                        @memset(hs, 0xee);
+                        @memcpy(hs[pos..][0..nlen], ns);
+                        // Alignment changes addresses, not these fully reset slice bytes.
+                        if (hoff == 0 and noff == 0)
+                            try testing.expectEqual(@as(?usize, pos), oracle(hs, ns));
+                        // The unique zero marker permits only the planted start.
+                        try testing.expectEqual(@as(?usize, pos), find(hs, ns));
+                    }
+                }
+            }
+        }
+    }
+}
+
+test "long one-shot absence rejects complete match outside logical tail" {
+    var hstorage: [4097 + 18 + 64]u8 = @splat(0xa5);
+    var nstorage: [4097 + 64]u8 = @splat(0x5a);
+    for ([_]usize{ 32, 33, 63, 64, 65, 4095, 4096, 4097 }) |nlen| {
+        for (0..64) |hoff| {
+            const noff = (hoff * 5 + 1) % 64;
+            const ns = nstorage[noff..][0..nlen];
+            @memset(ns, 0);
+            ns[nlen - 1] = 1;
+            for ([_]usize{ 0, 1, 15, 16, 17, 18 }) |difference| {
+                const hlen = nlen + difference;
+                const hs = hstorage[hoff..][0..hlen];
+                @memset(hs, 0);
+                // The only complete match starts one byte beyond the legal limit.
+                hstorage[hoff + hlen] = 1;
+                const hbefore = hstorage;
+                const nbefore = nstorage;
+                // All alignments contain identical zeros versus a terminal one.
+                if (hoff == 0) try testing.expectEqual(@as(?usize, null), oracle(hs, ns));
+                try testing.expectEqual(@as(?usize, null), find(hs, ns));
+                try testing.expectEqualSlices(u8, &hbefore, &hstorage);
+                try testing.expectEqualSlices(u8, &nbefore, &nstorage);
+            }
+        }
+    }
+}
+
+test "long one-shot repeated overlapping zero matches and shared storage" {
+    var hstorage: [4096 + 18 + 63]u8 = @splat(0xa5);
+    var nstorage: [4096 + 63]u8 = @splat(0x5a);
+    for ([_]usize{ 32, 33, 64, 4096 }) |nlen| {
+        for (0..64) |hoff| {
+            const noff = (hoff * 3 + 17) % 64;
+            const ns = nstorage[noff..][0..nlen];
+            @memset(ns, 0);
+            for (0..19) |difference| {
+                const hs = hstorage[hoff..][0 .. nlen + difference];
+                @memset(hs, 0);
+                // Slice bytes are reset identically at every alignment.
+                if (hoff == 0) try testing.expectEqual(@as(?usize, 0), oracle(hs, ns));
+                try testing.expectEqual(@as(?usize, 0), find(hs, ns));
+                hs[0] = 1;
+                const expected: ?usize = if (difference == 0) null else 1;
+                if (hoff == 0) try testing.expectEqual(expected, oracle(hs, ns));
+                try testing.expectEqual(expected, find(hs, ns));
+                const shared = hs[difference..][0..nlen];
+                const before = hstorage;
+                // Identical slices match at zero; a zero-only suffix first matches at one.
+                const shared_expected: ?usize = if (difference == 0) 0 else 1;
+                if (hoff == 0) try testing.expectEqual(shared_expected, oracle(hs, shared));
+                try testing.expectEqual(shared_expected, find(hs, shared));
+                try testing.expectEqualSlices(u8, &before, &hstorage);
+            }
+        }
+    }
 }
