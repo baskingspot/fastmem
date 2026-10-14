@@ -16,6 +16,7 @@ const stride = common.stride;
 const memcpy_impl = @import("memcpy.zig");
 const memmove_impl = @import("memmove.zig");
 const generic = @import("generic.zig");
+const find_impl = @import("find.zig");
 
 // aarch64 kernels: ports of Arm Optimized Routines (see THIRD_PARTY.md).
 // The SVE pair is the G2 C-ABI baseline; the advsimd pair is the G6
@@ -107,6 +108,7 @@ pub const impl = .{
     .copy = copy_impl_name,
     .move = move_impl_name,
     .set = set_impl_name,
+    .find = if (on_dispatch) "memchr-bd6068c+dispatch" else "memchr-bd6068c",
 };
 
 /// Runtime CPU dispatch (docs/runtime-dispatch.md). It is active in x86_64
@@ -317,7 +319,22 @@ pub inline fn set(comptime T: type, dest: []T, value: T) void {
 /// Return the element index of the first match, or `null` if none exists.
 /// An empty needle matches at index zero. Neither input is modified.
 pub inline fn find(comptime T: type, haystack: []const T, needle: []const T) ?usize {
-    return std.mem.find(T, haystack, needle);
+    if (@inComptime() or T != u8) return std.mem.find(T, haystack, needle);
+    // Empty/oversized/tiny searches need neither a dereference nor CPUID.
+    if (needle.len == 0) return 0;
+    if (needle.len > haystack.len) return null;
+    if (comptime on_dispatch) {
+        if (haystack.len >= 64 and needle.len > 1 and needle.len != haystack.len) {
+            const found = x86_dispatch.findPointer()(
+                haystack.ptr,
+                haystack.len,
+                needle.ptr,
+                needle.len,
+            );
+            return if (found == std.math.maxInt(usize)) null else found;
+        }
+    }
+    return find_impl.find(haystack, needle);
 }
 
 test "find follows stdlib subslice semantics" {
@@ -329,6 +346,31 @@ test "find follows stdlib subslice semantics" {
     try testing.expectEqual(@as(?usize, 3), find(u8, "abc\x00de", "\x00de"));
     try testing.expectEqual(@as(?usize, 1), find(u16, &.{ 300, 400, 500 }, &.{ 400, 500 }));
     try testing.expectEqual(@as(?usize, 0), comptime find(u8, "constant", "const"));
+    try testing.expectEqual(@as(?usize, 1), find(f32, &.{ 3.0, -0.0, 8.0 }, &.{ 0.0, 8.0 }));
+    const floats = [_]f32{ std.math.nan(f32), 1.0 };
+    try testing.expectEqual(std.mem.find(f32, &floats, &floats), find(f32, &floats, &floats));
+    try testing.expectEqual(@as(?usize, null), find(u16, &.{ 0x0201, 0x0403 }, &.{0x0302}));
+    try testing.expectEqual(@as(?usize, 0), comptime find(u16, &.{ 500, 600 }, &.{500}));
+}
+
+test "find public runtime byte path and dispatch levels" {
+    var haystack: [512]u8 = @splat('a');
+    var needle: [128]u8 = @splat('a');
+    needle[73] = 'b';
+    for (needle, haystack[257..][0..needle.len]) |byte, *out| out.* = byte;
+    try testing.expectEqual(@as(?usize, 257), find(u8, &haystack, &needle));
+    try testing.expectEqual(@as(?usize, null), find(u8, haystack[0..256], &needle));
+    if (comptime on_dispatch) {
+        const detected = x86_dispatch.level();
+        defer x86_dispatch.force(detected) catch unreachable;
+        inline for (std.meta.tags(x86_dispatch.Level)) |level| {
+            if (x86_dispatch.detect().supports(level)) {
+                try x86_dispatch.force(level);
+                try testing.expectEqual(@as(?usize, 257), find(u8, &haystack, &needle));
+                try testing.expectEqual(@as(?usize, null), find(u8, haystack[0..256], &needle));
+            }
+        }
+    }
 }
 
 fn allBytesEqual(bytes: []const u8) bool {

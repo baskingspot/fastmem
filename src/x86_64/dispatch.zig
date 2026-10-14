@@ -20,6 +20,7 @@ const x86_move = @import("move.zig");
 const compact = @import("compact.zig");
 const ops = @import("ops.zig");
 const generic = @import("../generic.zig");
+const find_impl = @import("../find.zig");
 
 pub const Level = cpuid.Level;
 pub const Info = cpuid.Info;
@@ -46,12 +47,16 @@ else
 pub const CopyFn = *const fn (?*anyopaque, ?*const anyopaque, usize) callconv(.c) ?*anyopaque;
 pub const SetFn = *const fn (?*anyopaque, c_int, usize) callconv(.c) ?*anyopaque;
 const NameFn = *const fn () callconv(.c) [*:0]const u8;
+pub const FindFn = *const fn ([*]const u8, usize, [*]const u8, usize) callconv(.c) usize;
+const find_prefix = "fastmem_find_" ++
+    (if (@hasDecl(options, "x86_instance")) options.x86_instance else "none") ++ "_";
 
 const Kernels = struct {
     copy: CopyFn,
     move: CopyFn,
     set: SetFn,
     name: NameFn,
+    find: FindFn,
 };
 
 const generic_copy: CopyFn = if (small_max < 128) &genericCopyAboveSmall else &generic.memcpy;
@@ -121,6 +126,7 @@ fn kernels(comptime l: Level) Kernels {
         .move = generic_move,
         .set = generic_set,
         .name = &genericName,
+        .find = &find_impl.kernel,
     };
     const prefix = symbol_prefix ++ @tagName(l) ++ "_";
     // x86 memcpy is the memmove kernel, as in the comptime builds.
@@ -136,6 +142,10 @@ fn kernels(comptime l: Level) Kernels {
             .visibility = .hidden,
         }),
         .name = @extern(NameFn, .{ .name = prefix ++ "name", .visibility = .hidden }),
+        .find = @extern(FindFn, .{
+            .name = find_prefix ++ @tagName(l),
+            .visibility = .hidden,
+        }),
     };
 }
 
@@ -147,6 +157,7 @@ fn genericName() callconv(.c) [*:0]const u8 {
 var copy_fn: CopyFn = &resolveCopy;
 var move_fn: CopyFn = &resolveMove;
 var set_fn: SetFn = &resolveSet;
+var find_fn: FindFn = &resolveFind;
 const unresolved = std.math.maxInt(u8);
 var selected: u8 = unresolved;
 
@@ -163,6 +174,7 @@ comptime {
         @export(generic_copy, .{ .name = p ++ "generic_memcpy", .visibility = hidden });
         @export(generic_move, .{ .name = p ++ "generic_memmove", .visibility = hidden });
         @export(generic_set, .{ .name = p ++ "generic_memset", .visibility = hidden });
+        @export(&find_impl.kernel, .{ .name = find_prefix ++ "generic", .visibility = hidden });
     }
 }
 
@@ -304,6 +316,17 @@ fn resolveSet(dest: ?*anyopaque, c: c_int, n: usize) callconv(.c) ?*anyopaque {
     return @call(tail, setPointer(), .{ dest, c, n });
 }
 
+pub inline fn findPointer() FindFn {
+    return @atomicLoad(FindFn, &find_fn, .monotonic);
+}
+
+fn resolveFind(h: [*]const u8, hlen: usize, n: [*]const u8, nlen: usize) callconv(.c) usize {
+    @disableIntrinsics();
+    if (comptime resolver_trap) @trap();
+    install(detect().select());
+    return @call(tail, findPointer(), .{ h, hlen, n, nlen });
+}
+
 fn install(l: Level) void {
     @disableIntrinsics();
     switch (l) {
@@ -312,6 +335,7 @@ fn install(l: Level) void {
             @atomicStore(CopyFn, &copy_fn, k.copy, .monotonic);
             @atomicStore(CopyFn, &move_fn, k.move, .monotonic);
             @atomicStore(SetFn, &set_fn, k.set, .monotonic);
+            @atomicStore(FindFn, &find_fn, k.find, .monotonic);
         },
     }
     @atomicStore(u8, &selected, @intFromEnum(l), .monotonic);

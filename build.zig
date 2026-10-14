@@ -153,6 +153,14 @@ const Fastmem = struct {
                 .pic = true,
             });
             root.addOptions("fastmem_options", fm.plain());
+            root.addImport("find_kernel", b.createModule(.{
+                .root_source_file = b.path("src/find.zig"),
+                .target = level_target,
+                .optimize = .ReleaseFast,
+                .no_builtin = true,
+                .omit_frame_pointer = true,
+                .pic = true,
+            }));
             object.* = b.addObject(.{
                 .name = "fastmem-x86-" ++ name,
                 .root_module = root,

@@ -115,3 +115,41 @@ the Zig host detection for the models that fastmem tunes. It contains no
 Zig standard library code. The feature bit positions come from the Intel
 SDM and the AMD APM.
 
+
+## Rust memchr (forward byte search)
+
+Upstream: https://github.com/BurntSushi/memchr
+Pinned commit: `bd6068c30e9074a90c285e47912fa0b047d07597` (memchr 2.8.3).
+License: MIT OR Unlicense; fastmem selects MIT. The unchanged MIT notice,
+Copyright (c) 2015 Andrew Gallant, is retained in `licenses/memchr-MIT.txt`.
+
+| Ported file | Upstream files | Port |
+|---|---|---|
+| `src/find.zig` | `src/memmem/mod.rs`, `src/memmem/searcher.rs`, `src/arch/all/rabinkarp.rs`, `src/arch/all/twoway.rs`, `src/arch/all/packedpair/mod.rs`, `src/arch/generic/packedpair.rs`, `src/arch/x86_64/avx2/packedpair.rs` | Minimal forward one-shot policy, wrapping Rabin-Karp, ranked packedpair, Two-Way factorization/periodic memory/approximate-byte-set skips and adaptive SIMD prefilter; Zig vector primitives replace Rust vector traits |
+| `src/find/rank.zig` | `src/arch/all/packedpair/default_rank.rs` | Unchanged 256-byte background rarity ranks |
+
+The one-shot tiny-haystack cutoff is 64 bytes; full packedpair owns needles
+of 2 through 32 bytes. Automatic pair selection examines offsets 0 through
+254. AVX2 uses 32-byte vectors and falls back to 16-byte vectors when its
+shifted loads do not fit; SSE2/NEON use 16-byte vectors. No AVX512/SVE search
+policy is introduced. Overlapping vector tails retain bounded upstream loads;
+exact verification is internal bounded vector/scalar equality, not libc.
+Boolean-vector masks use direct bitcasts on little-endian targets; big-endian
+backends construct explicit per-lane weights to preserve first-match order
+(aarch64_be and powerpc64 have different raw boolean-vector bitcast layouts).
+The single-byte dependency is a minimal internal vector/scalar scan, not a
+port of the entire upstream memchr machinery.
+
+Intentional adaptations: generic/comptime calls delegate to Zig's stdlib;
+empty, oversized, equal-length and single-byte cases precede preprocessing;
+local state replaces Rust's dynamic union, ownership and iterators. Two-Way
+small/large loops share control flow, and backward verification uses an
+exclusive index rather than upstream's redundant critical-byte recheck.
+Suffix positions retain upstream's zero-based form (no unsigned -1 sentinel).
+Bounds use subtraction/check-before-advance to avoid integer overflow.
+Adaptive attempts and skipped bytes saturate in u32, as upstream does; the
+8-byte threshold multiplication is widened to u64 (upstream uses u32).
+The policy remains 50 attempts before testing average prefilter displacement;
+inertness is permanent within a search. CPU dispatch uses fastmem's existing
+CPUID/OS-state selection and per-level objects, with instance-qualified hidden
+`fastmem_find_*` symbols, not a libc `memmem` symbol or new public ABI.

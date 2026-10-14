@@ -9,6 +9,7 @@ const options = @import("fastmem_options");
 const move = @import("move.zig");
 const set = @import("set.zig");
 const tuning = @import("tuning.zig");
+const find = @import("find_kernel");
 
 // The same names as `kernels` in dispatch.zig: prefix, instance, level.
 const prefix = "fastmem_x86_" ++ options.x86_instance ++ "_" ++ builtin.cpu.model.name ++ "_";
@@ -30,6 +31,10 @@ comptime {
         .visibility = .hidden,
     });
     @export(&name, .{ .name = prefix ++ "name", .visibility = .hidden });
+    @export(&find.kernel, .{
+        .name = "fastmem_find_" ++ options.x86_instance ++ "_" ++ builtin.cpu.model.name,
+        .visibility = .hidden,
+    });
 }
 
 // A function, not a data symbol: the harness disassembles every
