@@ -314,6 +314,23 @@ pub inline fn set(comptime T: type, dest: []T, value: T) void {
     generic.setFallback(T, dest, value);
 }
 
+/// Return the element index of the first match, or `null` if none exists.
+/// An empty needle matches at index zero. Neither input is modified.
+pub inline fn find(comptime T: type, haystack: []const T, needle: []const T) ?usize {
+    return std.mem.find(T, haystack, needle);
+}
+
+test "find follows stdlib subslice semantics" {
+    try testing.expectEqual(@as(?usize, 0), find(u8, "", ""));
+    try testing.expectEqual(@as(?usize, 0), find(u8, "bytes", ""));
+    try testing.expectEqual(@as(?usize, null), find(u8, "", "x"));
+    try testing.expectEqual(@as(?usize, null), find(u8, "short", "longer"));
+    try testing.expectEqual(@as(?usize, 1), find(u8, "banana", "ana"));
+    try testing.expectEqual(@as(?usize, 3), find(u8, "abc\x00de", "\x00de"));
+    try testing.expectEqual(@as(?usize, 1), find(u16, &.{ 300, 400, 500 }, &.{ 400, 500 }));
+    try testing.expectEqual(@as(?usize, 0), comptime find(u8, "constant", "const"));
+}
+
 fn allBytesEqual(bytes: []const u8) bool {
     for (bytes[1..]) |b| if (b != bytes[0]) return false;
     return true;
