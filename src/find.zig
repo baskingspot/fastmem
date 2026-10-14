@@ -27,23 +27,18 @@ pub fn find(haystack: []const u8, needle: []const u8) ?usize {
     if (needle.len == haystack.len) return if (equal(haystack, needle)) 0 else null;
     if (needle.len == 1) return findByte(haystack, needle[0]);
     if (haystack.len < tiny_haystack) return rabinKarp(haystack, needle);
-    if (needle.len > packed_max) {
-        // Avoid one-shot preprocessing when a bounded full comparison suffices.
-        if (equal(haystack[0..needle.len], needle)) return 0;
-        const last = haystack.len - needle.len;
-        if (last <= few_starts_max_difference) {
-            var pos: usize = 1;
-            while (pos <= last) : (pos += 1) {
-                if (equal(haystack[pos..][0..needle.len], needle)) return pos;
-            }
-            return null;
+    if (needle.len <= packed_max) return packedSearch(haystack, needle, selectPair(needle));
+    // Avoid one-shot preprocessing when a bounded full comparison suffices.
+    if (equal(haystack[0..needle.len], needle)) return 0;
+    const last = haystack.len - needle.len;
+    if (last <= few_starts_max_difference) {
+        var pos: usize = 1;
+        while (pos <= last) : (pos += 1) {
+            if (equal(haystack[pos..][0..needle.len], needle)) return pos;
         }
+        return null;
     }
-    const pair = selectPair(needle);
-    return if (needle.len <= packed_max)
-        packedSearch(haystack, needle, pair)
-    else
-        twoWay(haystack, needle, pair);
+    return twoWay(haystack, needle, selectPair(needle));
 }
 
 // Internal dispatch boundary: maxInt cannot be a match for a nonempty needle.
@@ -637,6 +632,44 @@ test "long one-shot repeated overlapping zero matches and shared storage" {
                 if (hoff == 0) try testing.expectEqual(shared_expected, oracle(hs, shared));
                 try testing.expectEqual(shared_expected, find(hs, shared));
                 try testing.expectEqualSlices(u8, &before, &hstorage);
+            }
+        }
+    }
+}
+
+test "packed entry periodic absence and tiny cutoff boundaries" {
+    var hstorage: [65 + 63]u8 = @splat(0xa5);
+    var nstorage: [33 + 63]u8 = @splat(0x5a);
+    const offsets = [_]usize{ 0, 1, 15, 16, 31, 32, 63 };
+    for ([_]usize{ 4, 31, 32, 33 }) |nlen| {
+        for ([_]usize{ 63, 64, 65 }) |hlen| {
+            for (offsets) |hoff| {
+                for (offsets) |noff| {
+                    const hs = hstorage[hoff..][0..hlen];
+                    const ns = nstorage[noff..][0..nlen];
+                    for (ns, 0..) |*byte, i| byte.* = "abababa"[i % 7];
+                    ns[nlen - 1] = 'z';
+                    for (hs, 0..) |*byte, i| byte.* = "abababa"[i % 7];
+                    // Relative bytes are identical at the control and all other alignments.
+                    if (hoff == 0 and noff == 0)
+                        try testing.expectEqual(@as(?usize, null), oracle(hs, ns));
+                    const hbefore = hstorage;
+                    const nbefore = nstorage;
+                    try testing.expectEqual(@as(?usize, null), find(hs, ns));
+                    try testing.expectEqualSlices(u8, &hbefore, &hstorage);
+                    try testing.expectEqualSlices(u8, &nbefore, &nstorage);
+                    for ([_]usize{ 0, hlen - nlen }) |pos| {
+                        for (hs, 0..) |*byte, i| byte.* = "abababa"[i % 7];
+                        @memcpy(hs[pos..][0..nlen], ns);
+                        // Only the planted needle contains z, so it is the first match.
+                        if (hoff == 0 and noff == 0)
+                            try testing.expectEqual(@as(?usize, pos), oracle(hs, ns));
+                        const planted_before = hstorage;
+                        try testing.expectEqual(@as(?usize, pos), find(hs, ns));
+                        try testing.expectEqualSlices(u8, &planted_before, &hstorage);
+                        try testing.expectEqualSlices(u8, &nbefore, &nstorage);
+                    }
+                }
             }
         }
     }
