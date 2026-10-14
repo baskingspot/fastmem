@@ -62,9 +62,7 @@ def source_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def resolve(
-    config: Config, revisions: tuple[str, ...], experiment: str = "auto"
-) -> list[Source]:
+def resolve(config: Config, revisions: tuple[str, ...], experiment: str = "auto") -> list[Source]:
     sources = []
     for index, revision in enumerate(revisions):
         if revision == "WORKTREE":

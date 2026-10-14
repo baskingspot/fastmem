@@ -322,6 +322,61 @@ def test_actual_arm_authenticated_edges_fail_closed(tmp_path: Path, op: str) -> 
     assert len(scan(text, ["repro"])["unresolved"]) == 1
 
 
+@pytest.mark.parametrize("op", ["lcallq", "ljmpq"])
+def test_actual_x86_far_edges_fail_closed(portable: Path, tmp_path: Path, op: str) -> None:
+    elf = Elf(portable)
+    address, size, _ = elf.symbols["bench_find_fastmem"][0]
+    code = assembled_bytes(tmp_path, f"{op} *(%r9)\nret", "x86_64-linux-gnu")
+    assert len(code) <= size
+    mutant = patch_bytes(
+        portable, tmp_path / "mutant", address, code + b"\x90" * (size - len(code))
+    )
+    result = audited(mutant, tmp_path / "mutant.asm")
+    assert result["status"] == "invalid"
+    assert any(item["caller_address"] == hex(address) for item in result["unresolved"])
+    assert op in (tmp_path / "mutant.asm").read_text()
+
+
+@pytest.mark.parametrize("op", ["lcall", "lcallw", "lcalll", "lcallq"])
+def test_far_calls_never_receive_clock_exemption(op: str) -> None:
+    body = Assembly(f"""00001000 <timed>:
+ 1000: movq %rsi, %rbx
+ 1001: movq 0x8(%rbx), %rax
+ 1002: {op} *0x2c0(%rax)
+ 1003: movq 0x8(%rbx), %rax
+ 1004: {op} *0x2c0(%rax)
+ 1005: retq
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+@pytest.mark.parametrize("op", ["ljmp", "ljmpw", "ljmpl", "ljmpq"])
+def test_far_tails_do_not_fall_through_to_clocks(op: str) -> None:
+    body = Assembly(f"""00001000 <timed>:
+ 1000: movq %rsi, %rbx
+ 1001: {op} *(%r9)
+ 1002: movq 0x8(%rbx), %rax
+ 1003: callq *0x2c0(%rax)
+ 1004: movq 0x8(%rbx), %rax
+ 1005: callq *0x2c0(%rax)
+ 1006: retq
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+def test_arm_hbc_conditional_edge_follows_target() -> None:
+    evidence = scan(
+        """00001000 <root>:
+ 1000: bc.eq 0x2000 <helper>
+00002000 <helper>:
+ 2000: blr x9
+""",
+        ["root"],
+    )
+    assert evidence["followed_callees"] == ["helper", "root"]
+    assert evidence["unresolved"][0]["caller"] == "helper"
+
+
 @pytest.mark.parametrize("mutation", ["index-scale", "xchg-clock"])
 def test_actual_portable_byte_counterexamples_fail_closed(
     portable: Path,

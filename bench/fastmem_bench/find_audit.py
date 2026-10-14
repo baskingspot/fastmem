@@ -13,9 +13,13 @@ HEADER = re.compile(r"^([0-9a-f]+) <(.+)>:$")
 INSTRUCTION = re.compile(r"^\s*([0-9a-f]+):\s+([a-z0-9_.]+)\s*(.*?)\s*$")
 ARM_AUTH_CALLS = {"blraa", "blrab", "blraaz", "blrabz"}
 ARM_AUTH_TAILS = {"braa", "brab", "braaz", "brabz"}
-CALLS = {"call", "callq", "bl", "blr", *ARM_AUTH_CALLS}
-TAILS = {"jmp", "jmpq", "b", "br", *ARM_AUTH_TAILS}
-BRANCH = re.compile(r"callq?|j\w+|loop\w*|xbegin|blr?|b(?:\.\w+)?|br|bl?ra[ab]z?|cbn?z|tbn?z")
+X86_FAR_CALLS = {"lcall", "lcallw", "lcalll", "lcallq"}
+X86_FAR_TAILS = {"ljmp", "ljmpw", "ljmpl", "ljmpq"}
+CALLS = {"call", "callq", "bl", "blr", *ARM_AUTH_CALLS, *X86_FAR_CALLS}
+TAILS = {"jmp", "jmpq", "b", "br", *ARM_AUTH_TAILS, *X86_FAR_TAILS}
+BRANCH = re.compile(
+    r"l?call[qlw]?|ljmp[qlw]?|j\w+|loop\w*|xbegin|blr?|b(?:c)?(?:\.\w+)?|br|bl?ra[ab]z?|cbn?z|tbn?z"
+)
 DIRECT = re.compile(r"(?:^|,\s*)(?:0x)?([0-9a-f]+)(?:\s+<([^>]+)>)?$")
 
 
