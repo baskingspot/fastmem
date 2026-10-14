@@ -13,7 +13,6 @@ from fastmem_bench.find_audit import (
     Elf,
     backedges,
     clock_calls,
-    dispatch_call,
     dispatch_proof,
 )
 
@@ -71,7 +70,7 @@ def scan(assembly: str, roots: list[str]) -> dict[str, Any]:
     return _scan(asm, asm.roots(roots), {})
 
 
-def inspect(  # noqa: C901, PLR0912 — fail-closed proof assembly
+def inspect(  # noqa: C901 — fail-closed proof assembly
     binary: Path, destination: Path, *, kernel_pending: bool = True
 ) -> dict[str, Any]:
     assembly = subprocess.run(
@@ -113,35 +112,24 @@ def inspect(  # noqa: C901, PLR0912 — fail-closed proof assembly
     dispatch = None
     dispatch_error = None
     dispatch_sites = []
-    if "x86_64.dispatch.find_fn" in elf.symbols:
+    if "x86_64.dispatch.dispatchFind" in elf.symbols:
         try:
             dispatch = dispatch_proof(elf, asm)
         except (ValueError, KeyError) as error:
             dispatch_error = str(error)
         if dispatch:
             targets = [int(e["address"], 16) for e in dispatch["entries"]]
-            targets.append(int(dispatch["initial_resolver"], 16))
-            slot = int(dispatch["slot"], 16)
-            incoming_targets = {
-                target
-                for body in asm.bodies.values()
-                for i in body
-                if BRANCH.fullmatch(i.op) and (target := i.target()) is not None
-            }
-            for owner, body in asm.bodies.items():
-                for index, instruction in enumerate(body):
-                    if dispatch_call(body, index, slot, incoming_targets):
-                        finite[instruction.address] = targets
-                        dispatch_sites.append(
-                            {
-                                "caller": asm.names[owner],
-                                "caller_address": hex(owner),
-                                "address": hex(instruction.address),
-                                "inside_backedge": any(
-                                    lo <= instruction.address <= hi for lo, hi in backedges(body)
-                                ),
-                            }
-                        )
+            address = int(dispatch["branch"], 16)
+            owner = asm.owners[address]
+            finite[address] = targets
+            dispatch_sites.append(
+                {
+                    "caller": asm.names[owner],
+                    "caller_address": hex(owner),
+                    "address": hex(address),
+                    "inside_backedge": False,
+                }
+            )
     clocks = []
     clock_offset = elf.clock_offset()
     # Only exact Io-vtable call patterns with argument provenance, outside all
@@ -163,11 +151,10 @@ def inspect(  # noqa: C901, PLR0912 — fail-closed proof assembly
     roots = [wrapper, *fast_loops]
     if dispatch:
         roots.extend(int(e["address"], 16) for e in dispatch["entries"])
-        roots.append(int(dispatch["initial_resolver"], 16))
     evidence = _scan(asm, roots, finite)
     if dispatch_error:
         evidence["unresolved"].append(
-            {"symbol": "x86_64.dispatch.find_fn", "reason": dispatch_error}
+            {"symbol": "x86_64.dispatch.dispatchFind", "reason": dispatch_error}
         )
     evidence.update(
         {

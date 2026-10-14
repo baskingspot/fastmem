@@ -166,6 +166,30 @@ Above 128 bytes, x86 copy and move use the same bounded level entry.
 Their complete comptime entries differ at small sizes.
 At the `generic` level, `memcpy` uses the forward-only generic copy.
 
+### Private find path
+
+Search reuses the monotonic atomic `selected` byte, not a mutable function pointer.
+Tiny and local find paths still bypass dispatch.
+The private `findPointer()` returns one constant C-ABI dispatcher address.
+That noinline dispatcher loads the byte with a volatile atomic load, masks it
+with 7, and tail-jumps through an immutable eight-word table.
+Entries 0 through 6 are the existing level kernels; entry 7 is `resolveFind`.
+The initial byte is 255, so its masked index resolves on first use.
+The resolver keeps CPUID/OS validation and the three memory-pointer stores,
+then updates the shared selected byte and retries through the dispatcher.
+Supported `force` operations change that same byte.
+Concurrent first calls select the same level with monotonic cache semantics.
+
+The executable search audit proves the actual byte load, surviving mask,
+full-width bounded index, scale, table address, and all eight target words.
+The entire 64-byte table must be read-only in a LOAD or protected by page-complete
+GNU_RELRO (LLVM places constant function pointers in `.data.rel.ro`).
+All eight closures are traversed; incoming branches into the guard interior,
+unknown effects, altered entries, and mutable tables fail closed.
+A corrupt selected byte cannot introduce an arbitrary function target, though
+executing a corrupted index could select an ISA the host does not support.
+The all-256-byte unit control compares pointers without executing those levels.
+
 ### Recursion
 
 The resolver runs inside the first memory call of the process.

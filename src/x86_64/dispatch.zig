@@ -157,7 +157,17 @@ fn genericName() callconv(.c) [*:0]const u8 {
 var copy_fn: CopyFn = &resolveCopy;
 var move_fn: CopyFn = &resolveMove;
 var set_fn: SetFn = &resolveSet;
-var find_fn: FindFn = &resolveFind;
+// A corrupt cache byte can select only one of these immutable targets.
+const find_table: [8]FindFn = .{
+    kernels(.generic).find,
+    kernels(.x86_64_v3).find,
+    kernels(.x86_64_v4).find,
+    kernels(.sapphirerapids).find,
+    kernels(.graniterapids).find,
+    kernels(.znver4).find,
+    kernels(.znver5).find,
+    &resolveFind,
+};
 const unresolved = std.math.maxInt(u8);
 var selected: u8 = unresolved;
 
@@ -317,7 +327,26 @@ fn resolveSet(dest: ?*anyopaque, c: c_int, n: usize) callconv(.c) ?*anyopaque {
 }
 
 pub inline fn findPointer() FindFn {
-    return @atomicLoad(FindFn, &find_fn, .monotonic);
+    return &dispatchFind;
+}
+
+inline fn findLookup(raw: u8) FindFn {
+    return find_table[raw & 7];
+}
+
+noinline fn dispatchFind(
+    h: [*]const u8,
+    hlen: usize,
+    n: [*]const u8,
+    nlen: usize,
+) callconv(.c) usize {
+    @disableIntrinsics();
+    // Volatile prevents LLVM from inferring a seven-level range from stores
+    // and deleting the mask that bounds every executable table access.
+    const raw = @atomicLoad(u8, @as(*const volatile u8, &selected), .monotonic);
+    // Zig includes noinline in tail-call type matching, despite the same ABI.
+    const target: @TypeOf(&dispatchFind) = @ptrCast(findLookup(raw));
+    return @call(tail, target, .{ h, hlen, n, nlen });
 }
 
 fn resolveFind(h: [*]const u8, hlen: usize, n: [*]const u8, nlen: usize) callconv(.c) usize {
@@ -335,7 +364,6 @@ fn install(l: Level) void {
             @atomicStore(CopyFn, &copy_fn, k.copy, .monotonic);
             @atomicStore(CopyFn, &move_fn, k.move, .monotonic);
             @atomicStore(SetFn, &set_fn, k.set, .monotonic);
-            @atomicStore(FindFn, &find_fn, k.find, .monotonic);
         },
     }
     @atomicStore(u8, &selected, @intFromEnum(l), .monotonic);
@@ -422,4 +450,96 @@ fn xgetbv0() u64 {
         : [index] "{ecx}" (@as(u32, 0)),
     );
     return @as(u64, edx) << 32 | eax;
+}
+
+test "find dispatch: every raw byte selects one of eight immutable targets" {
+    if (comptime !enabled) return;
+    const expected: [8]FindFn = .{
+        kernels(.generic).find,
+        kernels(.x86_64_v3).find,
+        kernels(.x86_64_v4).find,
+        kernels(.sapphirerapids).find,
+        kernels(.graniterapids).find,
+        kernels(.znver4).find,
+        kernels(.znver5).find,
+        &resolveFind,
+    };
+    for (0..256) |raw| {
+        // Inspect pointer identity only: unsupported ISA entries must not run.
+        try std.testing.expectEqual(expected[raw % 8], findLookup(@intCast(raw)));
+    }
+    try std.testing.expectEqual(@as(FindFn, &dispatchFind), findPointer());
+}
+
+const find_test_haystack = "a" ** 256 ++ "needle" ++ "a" ** 128;
+
+fn findFirstCallWorker(start: *u8, result: *usize) void {
+    while (@atomicLoad(u8, start, .acquire) == 0) std.atomic.spinLoopHint();
+    result.* = findPointer()(find_test_haystack.ptr, find_test_haystack.len, "needle", 6);
+}
+
+test "find dispatch: bootstrap and concurrent first calls install memory kernels" {
+    if (comptime !enabled) return;
+    const detected = detect().select();
+    defer install(detected);
+    @atomicStore(u8, &selected, unresolved, .monotonic);
+    try std.testing.expectEqual(
+        @as(usize, 256),
+        findPointer()(find_test_haystack.ptr, find_test_haystack.len, "needle", 6),
+    );
+    try std.testing.expectEqual(detected, level());
+    @atomicStore(u8, &selected, unresolved, .monotonic);
+    @atomicStore(CopyFn, &copy_fn, &resolveCopy, .monotonic);
+    @atomicStore(CopyFn, &move_fn, &resolveMove, .monotonic);
+    @atomicStore(SetFn, &set_fn, &resolveSet, .monotonic);
+    var start: u8 = 0;
+    var results: [8]usize = undefined;
+    var threads: [8]std.Thread = undefined;
+    var spawned: usize = 0;
+    defer {
+        @atomicStore(u8, &start, 1, .release);
+        for (threads[0..spawned]) |thread| thread.join();
+    }
+    for (&threads, &results) |*thread, *result| {
+        thread.* = try std.Thread.spawn(.{}, findFirstCallWorker, .{ &start, result });
+        spawned += 1;
+    }
+    @atomicStore(u8, &start, 1, .release);
+    // Joining before reading results also proves the memory resolver stores.
+    for (threads) |thread| thread.join();
+    spawned = 0;
+    for (results) |result| try std.testing.expectEqual(@as(usize, 256), result);
+    try std.testing.expectEqual(detected, level());
+    switch (detected) {
+        inline else => |known| {
+            const k = comptime kernels(known);
+            try std.testing.expectEqual(k.copy, copyPointer());
+            try std.testing.expectEqual(k.move, movePointer());
+            try std.testing.expectEqual(k.set, setPointer());
+        },
+    }
+}
+
+test "find dispatch: supported force changes reuse the selected byte" {
+    if (comptime !enabled) return;
+    const info = detect();
+    defer install(info.select());
+    inline for (std.meta.tags(Level)) |l| {
+        const expected = find_table[@intFromEnum(l)];
+        if (info.supports(l)) {
+            try force(l);
+            try std.testing.expectEqual(
+                expected,
+                findLookup(@atomicLoad(u8, &selected, .monotonic)),
+            );
+            try std.testing.expectEqual(
+                @as(usize, 256),
+                findPointer()(find_test_haystack.ptr, find_test_haystack.len, "needle", 6),
+            );
+        } else {
+            const previous = @atomicLoad(u8, &selected, .monotonic);
+            try std.testing.expectError(error.Unsupported, force(l));
+            try std.testing.expectEqual(previous, @atomicLoad(u8, &selected, .monotonic));
+        }
+    }
 }

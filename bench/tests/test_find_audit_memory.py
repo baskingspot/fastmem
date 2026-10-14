@@ -1,4 +1,4 @@
-"""Actual-byte controls for overlapping spills and static dispatch-slot accesses."""
+"""Actual-byte controls for overlapping spills and bounded dispatch guards."""
 
 from pathlib import Path
 
@@ -82,40 +82,82 @@ def test_actual_clock_memory_counterexamples(portable: Path, tmp_path: Path, mut
 @pytest.mark.parametrize(
     "mutation",
     [
-        "absolute",
-        "partial",
-        "overlap-before",
-        "last-byte",
-        "address-escape",
-        "immediate-comment",
-        "segment-absolute",
-        "wide-atomic",
-        "unbounded-bit-store",
+        "mask-widen",
+        "mask-remove",
+        "partial-index",
+        "clobber",
+        "bypass",
+        "cross-owner-bypass",
+        "cross-owner-bypass-byte",
+        "missing-relro",
+        "short-relro",
+        "selected-byte",
+        "loader-relocation",
     ],
 )
-def test_actual_static_slot_counterexamples(portable: Path, tmp_path: Path, mutation: str) -> None:
+def test_actual_guard_counterexamples(  # noqa: C901, PLR0912, PLR0915 — explicit byte counterexamples
+    portable: Path, tmp_path: Path, mutation: str
+) -> None:
+    import struct
+
+    original = audited(portable, tmp_path / "original.asm")
     elf = Elf(portable)
-    slot = elf.symbol("x86_64.dispatch.find_fn")
-    address = elf.symbol("bench_find_fastmem")
-    if mutation == "absolute":
-        source = f"movq $0,{slot:#x}"
-    elif mutation == "segment-absolute":
-        source = f"movq $0,%ds:{slot:#x}"
-    elif mutation == "wide-atomic":
-        source = f"cmpxchg16b {slot & ~15:#x}"
-    elif mutation == "unbounded-bit-store":
-        source = f"btsq %rcx,{slot - 128:#x}"
-    elif mutation in {"partial", "last-byte"}:
-        offset = 1 if mutation == "partial" else 7
-        source = f"movb $0,{slot + offset - address - 7:#x}(%rip)"
-    elif mutation == "overlap-before":
-        source = f"movq $0,{slot - 4 - address - 11:#x}(%rip)"
-    elif mutation == "immediate-comment":
-        source = f"movq $-1,{slot - address - 11:#x}(%rip)"
+    proof = original["dispatch_proof"]
+    guard = int(proof["entry"], 16)
+    mask = int(proof["mask_instruction"], 16)
+    address = mask
+    if mutation in {"missing-relro", "short-relro", "selected-byte", "loader-relocation"}:
+        raw = bytearray(elf.raw)
+        table = int(proof["table"], 16)
+        if mutation in {"missing-relro", "short-relro"}:
+            phoff = struct.unpack_from("<Q", raw, 32)[0]
+            phsize, phnum = struct.unpack_from("<HH", raw, 54)
+            for n in range(phnum):
+                offset = phoff + n * phsize
+                kind, _, _, virtual, _, _, _, _ = struct.unpack_from("<IIQQQQQQ", raw, offset)
+                if kind == 0x6474E552:
+                    if mutation == "missing-relro":
+                        struct.pack_into("<I", raw, offset, 0)
+                    else:
+                        struct.pack_into("<Q", raw, offset + 40, table - virtual + 63)
+        elif mutation == "loader-relocation":
+            relocation = next(s for s in elf.sections if s[1] == 4 and s[2] & 2)
+            struct.pack_into("<Q", raw, relocation[4], table)
+        else:
+            selected = int(proof["selected_byte"], 16)
+            section = next(s for s in elf.sections if s[1] == 1 and s[3] <= selected < s[3] + s[5])
+            raw[section[4] + selected - section[3]] = 0xFE
+        mutant = tmp_path / "mutant"
+        mutant.write_bytes(raw)
     else:
-        source = f"movabsq ${slot:#x},%rax"
-    code = assembled_bytes(tmp_path, source + "\nxorl %eax,%eax\nret", "x86_64-linux-gnu")
-    mutant = patch_bytes(portable, tmp_path / "mutant", address, code)
+        if mutation == "mask-widen":
+            source = "andl $15,%eax"
+        elif mutation == "mask-remove":
+            source = "nop\nnop\nnop"
+        elif mutation == "partial-index":
+            address = guard
+            selected = int(proof["selected_byte"], 16)
+            table = int(proof["table"], 16)
+            source = (
+                f"movb {selected - guard - 6:#x}(%rip),%al\nandb $7,%al\n"
+                f"leaq {table - guard - 15:#x}(%rip),%r8\njmp *(%r8,%rax,8)"
+            )
+        elif mutation == "clobber":
+            source = "xchgq %rax,%rdx"
+        else:
+            address = guard if mutation == "bypass" else elf.symbol("bench_find_fastmem")
+            target = (
+                int(proof["branch"], 16) + 1 if mutation == "cross-owner-bypass-byte" else mask + 3
+            )
+            displacement = target - address - 5
+            code = b"\xe9" + struct.pack("<i", displacement)
+        if mutation not in {"bypass", "cross-owner-bypass", "cross-owner-bypass-byte"}:
+            code = assembled_bytes(tmp_path, source, "x86_64-linux-gnu")
+            if mutation == "partial-index":
+                code += b"\x90" * (elf.symbols["x86_64.dispatch.dispatchFind"][0][1] - len(code))
+        mutant = patch_bytes(portable, tmp_path / "mutant", address, code)
     evidence = audited(mutant, tmp_path / "mutant.asm")
-    assert evidence["status"] == "invalid"
-    assert evidence["unresolved"]
+    # Even an arbitrary stored byte cannot introduce a ninth executable target.
+    assert evidence["status"] == ("pending-review" if mutation == "selected-byte" else "invalid")
+    if mutation != "selected-byte":
+        assert evidence["unresolved"]

@@ -1,6 +1,5 @@
 """Mutation fixtures prove the delegation audit follows callees, including tail calls."""
 
-import re
 import shutil
 import struct
 import subprocess
@@ -17,7 +16,7 @@ from fastmem_bench.find_audit import (
     Elf,
     backedges,
     clock_calls,
-    selector_returns,
+    guard_call,
 )
 from fastmem_bench.find_codegen import inspect, scan
 
@@ -125,27 +124,20 @@ def audited(binary: Path, destination: Path, assembly: str | None = None) -> dic
         return inspect(binary, destination, kernel_pending=False)
 
 
-def test_real_portable_seven_closures_and_clock_identities(portable: Path, tmp_path: Path) -> None:
+def test_real_portable_eight_closures_and_clock_identities(portable: Path, tmp_path: Path) -> None:
     evidence = audited(portable, tmp_path / "executable.asm")
     assert evidence["status"] == "pending-review"
     assert evidence["anti_hoist_status"] == "manual-review-required"
     assert not evidence["delegations"]
     assert not evidence["unresolved"]
     proof = evidence["dispatch_proof"]
-    assert len(proof["entries"]) == 7
-    asm = Assembly((tmp_path / "executable.asm").read_text())
-    slot = int(proof["slot"], 16)
-    actual_writers = [
-        hex(owner)
-        for owner, body in asm.bodies.items()
-        for inst in body
-        if inst.op == "movq"
-        and inst.args.startswith("%")
-        and re.search(rf"# {slot:#x}\b", inst.args)
-    ]
-    assert proof["writers"] == actual_writers
-    assert proof["initial_resolver"] in actual_writers
-    assert len(proof["installation_tables"]) == 4
+    assert len(proof["entries"]) == 8
+    assert proof["mask"] == 7
+    assert proof["index_bits"] == 64
+    assert proof["scale"] == 8
+    assert proof["storage_bytes"] == 64
+    assert proof["storage_read_only"]
+    assert "x86_64.dispatch.find_fn" not in Elf(portable).symbols
     assert (
         (portable.parent.parent / "source-revision.txt")
         .read_text()
@@ -154,7 +146,7 @@ def test_real_portable_seven_closures_and_clock_identities(portable: Path, tmp_p
     closure = {f["address"] for f in evidence["followed_functions"]}
     assert all(e["address"] in closure for e in proof["entries"])
     assert sum(f["symbol"] == "find.twoWay" for f in evidence["followed_functions"]) == 7
-    assert any(c["inside_backedge"] for c in evidence["dispatch_calls"])
+    assert len(evidence["dispatch_calls"]) == 1
     assert len(evidence["clock_calls_for_manual_review"]) == 20
     clocks = {c["address"] for c in evidence["clock_calls_for_manual_review"]}
     assert not clocks.intersection(c["address"] for c in evidence["dispatch_calls"])
@@ -167,7 +159,7 @@ def test_real_portable_seven_closures_and_clock_identities(portable: Path, tmp_p
         "unknown-indirect",
         "search-as-clock",
         "unproven-table",
-        "selector-range",
+        "mask-range",
     ],
 )
 def test_real_portable_disassembly_mutations_fail_closed(
@@ -185,19 +177,19 @@ def test_real_portable_disassembly_mutations_fail_closed(
         inst = next(i for i in asm.bodies[owner] if i.op == "retq")
         replacement = f" {inst.address:x}: callq 0xdeadbeef <memcmp@plt>"
     elif mutation in {"unknown-indirect", "search-as-clock"}:
-        site = next(c for c in original["dispatch_calls"] if c["inside_backedge"])
+        site = original["dispatch_calls"][0]
         owner = int(site["caller_address"], 16)
         inst = next(i for i in asm.bodies[owner] if hex(i.address) == site["address"])
         operand = "*%r11" if mutation == "unknown-indirect" else "*0x2c0(%rax)"
         replacement = f" {inst.address:x}: callq {operand}"
     elif mutation == "unproven-table":
-        owner = int(original["dispatch_proof"]["initial_resolver"], 16)
-        inst = next(i for i in asm.bodies[owner] if i.op == "leal" and ",8)" in i.args)
+        owner = int(original["dispatch_proof"]["entry"], 16)
+        inst = next(i for i in asm.bodies[owner] if i.op == "jmpq")
         replacement = f" {inst.address:x}: {inst.op} {inst.args.replace(',8)', ',4)')}"
     else:
-        owner = int(original["dispatch_proof"]["selector"], 16)
-        inst = next(i for i in asm.bodies[owner] if i.op == "movb" and i.args == "$0x6, %al")
-        replacement = f" {inst.address:x}: movb $0x7, %al"
+        owner = int(original["dispatch_proof"]["entry"], 16)
+        inst = next(i for i in asm.bodies[owner] if i.op == "andl")
+        replacement = f" {inst.address:x}: andl $0xf, %eax"
     evidence = audited(portable, path, assembly.replace(inst.text, replacement, 1))
     assert evidence["status"] == "invalid"
     if mutation == "one-level-forbidden":
@@ -211,15 +203,11 @@ def test_real_portable_disassembly_mutations_fail_closed(
         }
 
 
-@pytest.mark.parametrize("mutation", ["slot", "one-level-target"])
-def test_real_elf_pointer_mutations_fail_closed(
-    portable: Path, tmp_path: Path, mutation: str
-) -> None:
+@pytest.mark.parametrize("index", range(8))
+def test_real_elf_pointer_mutations_fail_closed(portable: Path, tmp_path: Path, index: int) -> None:
     evidence = audited(portable, tmp_path / "original.asm")
     proof = evidence["dispatch_proof"]
-    address = int(proof["slot" if mutation == "slot" else "table"], 16)
-    if mutation == "one-level-target":
-        address += 5 * 8
+    address = int(proof["table"], 16) + index * 8
     elf = Elf(portable)
     section = next(s for s in elf.sections if s[1] == 1 and s[3] <= address < s[3] + s[5])
     raw = bytearray(elf.raw)
@@ -245,12 +233,6 @@ def test_clock_shape_inside_loop_is_not_a_clock() -> None:
     assert backedges(body) == [(0x1003, 0x1005)]
     assert clock_calls(body, 0x2C0) == [0x1002, 0x1007]
     assert not clock_calls(body, 0x2C8)
-
-
-def test_unknown_selector_return_fails_closed() -> None:
-    body = Assembly("00001000 <selector>:\n 1000: movl (%rdi), %eax\n 1001: retq\n").bodies[0x1000]
-    with pytest.raises(ValueError, match="selector return"):
-        selector_returns(body)
 
 
 def test_clock_provenance_requires_every_cfg_path() -> None:
@@ -387,10 +369,10 @@ def test_actual_portable_byte_counterexamples_fail_closed(
     elf = Elf(portable)
     asm = Assembly((tmp_path / "original.asm").read_text())
     if mutation == "index-scale":
-        owner = int(original["dispatch_proof"]["initial_resolver"], 16)
-        inst = next(i for i in asm.bodies[owner] if i.op == "leal" and ",8)" in i.args)
+        owner = int(original["dispatch_proof"]["entry"], 16)
+        inst = next(i for i in asm.bodies[owner] if i.op == "jmpq")
         address = inst.address
-        source = "leal " + inst.args.replace(",8)", ",4)")
+        source = "jmp " + inst.args.replace(",8)", ",4)")
     else:
         address = elf.symbol("bench_find.runFastmemDirect")
         source = (
@@ -495,45 +477,6 @@ def test_clock_cfg_loop_join_drops_identity() -> None:
     assert not clock_calls(body, 0x2C0)
 
 
-@pytest.mark.parametrize(
-    "mutation", ["shift-layout", "extra-nop", "writer-bypass", "writer-clobber"]
-)
-def test_installation_data_flow_not_compiler_template(
-    portable: Path,
-    tmp_path: Path,
-    mutation: str,
-) -> None:
-    original = audited(portable, tmp_path / "original.asm")
-    assembly = (tmp_path / "original.asm").read_text()
-    asm = Assembly(assembly)
-    selector = int(original["dispatch_proof"]["selector"], 16)
-    # Mutate ALL actual writer blocks to exercise register/length independence.
-    for owner in original["dispatch_proof"]["writers"]:
-        body = asm.bodies[int(owner, 16)]
-        call = next(n for n, i in enumerate(body) if i.op == "callq" and i.target() == selector)
-        lea = body[call + 2]
-        assert lea.op == "leal"
-        if mutation == "shift-layout":
-            assembly = assembly.replace(lea.text, f" {lea.address:x}: shll $0x3, %eax")
-            for inst in body[call + 3 : call + 11]:
-                if inst.op == "movq":
-                    assembly = assembly.replace(inst.text, inst.text.replace("(%rcx,", "(%rax,"))
-        elif mutation == "extra-nop":
-            assembly = assembly.replace(lea.text, lea.text + f"\n {lea.address + 1:x}: nop")
-        elif mutation == "writer-bypass":
-            assembly = assembly.replace(
-                body[0].text, f" {body[0].address:x}: jmp 0x{lea.address:x}"
-            )
-        else:
-            assembly = assembly.replace(
-                lea.text, lea.text + f"\n {lea.address + 1:x}: xchgq %rcx, %rdx"
-            )
-    evidence = audited(portable, tmp_path / "mutant.asm", assembly)
-    assert evidence["status"] == (
-        "pending-review" if mutation in {"shift-layout", "extra-nop"} else "invalid"
-    )
-
-
 @pytest.mark.parametrize("tail", ["br x9", "braa x9, x10", "braaz x9"])
 def test_indirect_tail_does_not_fall_through_to_clocks(tail: str) -> None:
     body = Assembly(f"""00001000 <timed>:
@@ -549,53 +492,51 @@ def test_indirect_tail_does_not_fall_through_to_clocks(tail: str) -> None:
     assert not clock_calls(body, 0x2C0)
 
 
-@pytest.mark.parametrize("mutation", ["memory-store", "slot-escape"])
-def test_installation_memory_and_slot_checks_remain_closed(
-    portable: Path,
-    tmp_path: Path,
-    mutation: str,
+@pytest.mark.parametrize(
+    ("index", "base", "target"),
+    [("%rax", "%r8", "%r11"), ("%r10", "%rbx", "%r9"), ("%rdx", "%r11", "%rax")],
+)
+@pytest.mark.parametrize("layout", ["direct", "scaled", "byte-mask"])
+def test_guard_independent_register_allocation(
+    index: str, base: str, target: str, layout: str
 ) -> None:
-    original = audited(portable, tmp_path / "original.asm")
-    assembly = (tmp_path / "original.asm").read_text()
-    asm = Assembly(assembly)
-    body = asm.bodies[int(original["dispatch_proof"]["initial_resolver"], 16)]
-    if mutation == "memory-store":
-        inst = next(i for i in body if "<x86_64.dispatch.copy_fn>" in i.args)
-        args = re.sub(r"^%\w+,", "%rax,", inst.args)
-        replacement = f" {inst.address:x}: movq {args}"
-    else:
-        inst = next(
-            i for i in body if "<x86_64.dispatch.find_fn>" in i.args and i.args.startswith("%")
+    low = {"%rax": "%eax", "%r10": "%r10d", "%rdx": "%edx"}[index]
+    byte = {"%rax": "%al", "%r10": "%r10b", "%rdx": "%dl"}[index]
+    mask = f"andl $0x7, {low}"
+    if layout == "byte-mask":
+        mask = f"andb $0x7, {byte}\n 1002: movzbl {byte}, {low}"
+    access = f"jmpq *({base},{index},8)"
+    if layout == "scaled":
+        access = (
+            f"shlq $0x3, {index}\n 1005: movq ({base},{index}), {target}\n 1006: jmpq *{target}"
         )
-        source = inst.args.split(", ", 1)[1].split("#", 1)[0].strip()
-        comment = inst.args.partition("#")[2]
-        replacement = f" {inst.address:x}: leaq {source}, %rax # {comment}"
-    result = audited(portable, tmp_path / "mutant.asm", assembly.replace(inst.text, replacement))
-    assert result["status"] == "invalid"
-    assert result["unresolved"]
-
-
-@pytest.mark.parametrize("register", ["%rax", "%rcx", "%r11"])
-def test_dispatch_branch_register_allocation_and_bypass(register: str) -> None:
-    from fastmem_bench.find_audit import dispatch_call
-
-    body = Assembly(f"""00001000 <root>:
- 1000: movq 0x100(%rip), {register} # 0x3000 <find_fn>
- 1001: movq {register}, %rbx
- 1002: callq *%rbx
+    body = Assembly(f"""00001000 <guard>:
+ 1000: movzbl 0x100(%rip), {low} # 0x3000 <selected>
+ 1001: {mask}
+ 1003: nop
+ 1004: leaq 0x100(%rip), {base} # 0x4000 <table>
+ 1007: {access}
 """).bodies[0x1000]
-    assert dispatch_call(body, 2, 0x3000)
-    assert not dispatch_call(body, 2, 0x3000, {0x1001})
+    # Synthetic addresses must be in execution order for the incoming-range check.
+    body = [type(i)(0x1000 + n, i.op, i.args, i.text) for n, i in enumerate(body)]
+    proof = guard_call(body, 0x3000, set())
+    assert proof["table"] == "0x4000"
+    assert proof["mask"] == 7
+    for inst in body[1:]:
+        with pytest.raises(ValueError, match="bypasses"):
+            guard_call(body, 0x3000, {inst.address})
 
 
-def test_dispatch_multiple_loads_do_not_hide_a_bypass() -> None:
-    from fastmem_bench.find_audit import dispatch_call
-
-    body = Assembly("""00001000 <root>:
- 1000: movq 0x100(%rip), %r11 # 0x3000 <find_fn>
- 1001: nop
- 1002: movq 0x100(%rip), %rax # 0x3000 <find_fn>
- 1003: callq *%r11
+@pytest.mark.parametrize(
+    "clobber", ["xchgq %rax, %rdx", "mulq %rbx", "cpuid", "movb $0, %al", "mystery %rdx"]
+)
+def test_guard_unknown_effects_fail_closed(clobber: str) -> None:
+    body = Assembly(f"""00001000 <guard>:
+ 1000: movzbl 0x100(%rip), %eax # 0x3000 <selected>
+ 1001: andl $0x7, %eax
+ 1002: {clobber}
+ 1003: leaq 0x100(%rip), %r8 # 0x4000 <table>
+ 1004: jmpq *(%r8,%rax,8)
 """).bodies[0x1000]
-    assert dispatch_call(body, 3, 0x3000)
-    assert not dispatch_call(body, 3, 0x3000, {0x1001})
+    with pytest.raises(ValueError, match="guard instruction"):
+        guard_call(body, 0x3000, set())

@@ -7,7 +7,6 @@ src/export/audit.py. These helpers intentionally do not inspect shared libraries
 import re
 import struct
 from dataclasses import dataclass
-from itertools import pairwise
 from pathlib import Path
 
 HEADER = re.compile(r"^([0-9a-f]+) <(.+)>:$")
@@ -100,6 +99,41 @@ class Elf:
         section = sections[0]
         return struct.unpack_from(f"<{count}Q", self.raw, section[4] + address - section[3])
 
+    def protected(self, address: int, size: int) -> None:
+        """Prove full file-backed storage in read-only LOAD or page-complete RELRO.
+
+        LLVM places const function pointers in data.rel.ro. GNU_RELRO makes
+        those relocation-bearing bytes read-only before executable calls.
+        """
+        sections = [s for s in self.sections if s[3] <= address and address + size <= s[3] + s[5]]
+        if not any(s[1] == 1 and s[2] & 2 for s in sections):
+            raise ValueError("Find table is not allocated storage")
+        phoff = struct.unpack_from("<Q", self.raw, 32)[0]
+        phsize, phnum = struct.unpack_from("<HH", self.raw, 54)
+        headers = [
+            struct.unpack_from("<IIQQQQQQ", self.raw, phoff + i * phsize) for i in range(phnum)
+        ]
+        relro = any(
+            h[0] == 0x6474E552 and h[3] <= address and address + size <= (h[3] + h[6]) & ~4095
+            for h in headers
+        )
+        covered = False
+        for kind, flags, _, virtual, _, filesz, memsz, _ in headers:
+            if kind != 1 or virtual >= address + size or address >= virtual + memsz:
+                continue
+            if flags & 2 and not relro:
+                raise ValueError("Find table overlaps unprotected writable LOAD")
+            covered |= bool(flags & 4 and virtual <= address and address + size <= virtual + filesz)
+        if not covered or (not relro and any(s[2] & 1 for s in sections)):
+            raise ValueError("Find table lacks protected storage")
+        for section in self.sections:
+            if section[1] not in {4, 9} or not section[2] & 2:
+                continue
+            for offset in range(section[4], section[4] + section[5], section[9]):
+                relocated = struct.unpack_from("<Q", self.raw, offset)[0]
+                if address - 7 <= relocated < address + size:
+                    raise ValueError("Loader relocation overlaps find target words")
+
     def clock_offset(self) -> int:
         now = self.symbol("Io.Threaded.now")
         offsets = set()
@@ -131,307 +165,132 @@ def backedges(body: list[Instruction]) -> list[tuple[int, int]]:
     ]
 
 
-def slot_register(instruction: Instruction, slot: int) -> str | None:
-    match = re.fullmatch(
-        r"movq\s+[-\w]+\(%rip\), (%\w+)\s+# (0x[0-9a-f]+) <[^>]+>",
-        instruction.op + " " + instruction.args,
-    )
-    return match[1] if match and int(match[2], 16) == slot else None
-
-
-def dispatch_call(
-    body: list[Instruction], index: int, slot: int, incoming_targets: set[int] | None = None
-) -> bool:
-    """Prove the branch register comes from this slot in the same basic block."""
-    inst = body[index]
-    if inst.op not in {"callq", "jmpq", "jmp"} or not re.fullmatch(r"\*%\w+", inst.args):
-        return False
-    values: dict[str, str | None] = {}
-    for instruction in body[:index]:
-        if BRANCH.fullmatch(instruction.op):
-            values.clear()
-        elif register := slot_register(instruction, slot):
-            values[register] = f"slot:{instruction.address}"
-        else:
-            _clock_step(instruction, values, -1)
-    source = values.get(inst.args[1:])
-    if source is None or not source.startswith("slot:"):
-        return False
-    load = int(source.partition(":")[2])
-    bypass = {i.address for i in body if load < i.address <= inst.address}
-    targets = (
-        incoming_targets
-        if incoming_targets is not None
-        else {target for i in body if BRANCH.fullmatch(i.op) and (target := i.target()) is not None}
-    )
-    return not targets.intersection(bypass)
-
-
-def selector_returns(body: list[Instruction]) -> set[int]:  # noqa: C901, PLR0912
-    """Conservative finite-value CFG interpretation of the selector's AL return.
-
-    Unsupported register writes become unknown. Both conditional paths are
-    explored; every return must have a proven finite value within the table.
-    """
-    positions = {i.address: n for n, i in enumerate(body)}
-    pending: list[tuple[int, frozenset[int] | None, frozenset[int] | None]] = [(0, None, None)]
-    seen = set()
-    returns: set[int] = set()
-    while pending:
-        index, a, c = pending.pop()
-        state = (index, a, c)
-        if state in seen:
-            continue
-        seen.add(state)
-        if len(seen) > 10000 or index >= len(body):
-            raise ValueError("Unproven selector control flow")
-        inst = body[index]
-        if inst.op not in {
-            "movl",
-            "movq",
-            "movb",
-            "movzbl",
-            "movabsq",
-            "notl",
-            "testl",
-            "andl",
-            "orl",
-            "andb",
-            "cmpb",
-            "cmpl",
-            "cmpq",
-            "xorl",
-            "leal",
-            "btq",
-            "sete",
-            "cmovel",
-            "retq",
-            "nopw",
-            "nopl",
-            "nop",
-        } and not inst.op.startswith("j"):
-            raise ValueError("Unsupported selector instruction")
-        args = inst.args.split("#", 1)[0].strip()
-        dest = args.rsplit(", ", 1)[-1]
-        if inst.op.startswith("ret"):
-            if a is None or not a <= set(range(7)):
-                raise ValueError("Unproven seven-level selector return")
-            returns.update(a)
-            continue
-        if BRANCH.fullmatch(inst.op):
-            target = inst.target()
-            if target not in positions or inst.op.startswith("call"):
-                raise ValueError("Unproven selector branch")
-            pending.append((positions[target], a, c))
-            if inst.op in {"jmp", "jmpq"}:
-                continue
-        elif dest in {
-            "%al",
-            "%ax",
-            "%eax",
-            "%rax",
-            "%ecx",
-            "%rcx",
-            "%cx",
-            "%cl",
-            "%ch",
-        } and not inst.op.startswith(("cmp", "test", "bt")):
-            value = None
-            if inst.op.startswith("mov") and (m := re.match(r"\$(0x[0-9a-f]+|[0-9]+),", args)):
-                value = frozenset({int(m[1], 0)})
-            elif inst.op.startswith("xor") and args.split(", ")[0] == dest:
-                value = frozenset({0})
-            elif inst.op.startswith("set"):
-                value = frozenset({0, 1})
-            elif inst.op == "leal" and args == "0x2(%rax,%rax,2), %eax" and a is not None:
-                value = frozenset(2 + 3 * v for v in a)
-            elif (
-                inst.op.startswith("cmov")
-                and args == "%ecx, %eax"
-                and a is not None
-                and c is not None
-            ):
-                value = a | c
-            if dest in {"%al", "%ax", "%eax", "%rax"}:
-                a = value
-            else:
-                c = value if dest in {"%ecx", "%rcx"} else None
-        pending.append((index + 1, a, c))
-    if returns != set(range(7)):
-        raise ValueError("Selector does not prove all seven levels")
-    return returns
-
-
 def _reference(inst: Instruction) -> int | None:
     match = re.search(r"# (0x[0-9a-f]+)\b", inst.args)
     return int(match[1], 16) if match else None
 
 
-def _static_width(inst: Instruction) -> int:
-    """Bound fixed-width memory effects and reject unknown extents."""
-    if inst.op in {"cmpxchg8b", "cmpxchg16b"}:
-        return 8 if inst.op == "cmpxchg8b" else 16
-    if inst.op in {"movzbl", "movsbl", "movsbq"} or re.fullmatch(r"set[a-z]+", inst.op):
-        return 1
-    if inst.op in {"movzwl", "movswl", "movswq"}:
-        return 2
-    if inst.op in {"call", "callq", "jmp", "jmpq"}:
-        return 8
-    if re.fullmatch(
-        r"(?:mov|add|sub|adc|sbb|and|or|xor|cmp|test|xchg|cmpxchg|xadd|inc|dec|neg|not|"
-        r"shl|shr|sar|rol|ror|rcl|rcr|mul|imul|div|idiv|push|pop)[bwlq]",
-        inst.op,
-    ):
-        return {"b": 1, "w": 2, "l": 4, "q": 8}[inst.op[-1]]
-    registers = re.findall(r"%(xmm|ymm|zmm|mm)\d+", inst.args)
-    if registers:
-        return max({"mm": 8, "xmm": 16, "ymm": 32, "zmm": 64}[r] for r in registers)
-    raise ValueError("Unproven static memory access width: " + inst.op)
+def guard_call(  # noqa: C901, PLR0912, PLR0915 — narrow explicit instruction semantics
+    body: list[Instruction], selected: int, incoming_targets: set[int]
+) -> dict:
+    """Prove a straight-line byte/mask/index/table/tail chain at its actual branch.
 
-
-def _static_ranges(inst: Instruction, next_address: int | None) -> list[tuple[int, int]]:
-    """Decode static x86 references without a symbol-name requirement."""
-    operands = _operands(inst.args.split("#", 1)[0].strip())
-    ranges = []
-    for original in operands:
-        operand = re.sub(r"^%(?:cs|ds|es|ss):", "", original)
-        address = None
-        if "%rip" in operand:
-            address = _reference(inst)
-            if address is None:
-                displacement = re.fullmatch(r"\*?(-?0x[0-9a-f]+)?\(%rip\)", operand)
-                if (
-                    displacement is None
-                    or next_address is None
-                    or not 0 < next_address - inst.address <= 15
-                ):
-                    raise ValueError("Unproven RIP-relative address")
-                address = (next_address + int(displacement[1] or "0", 16)) % (1 << 64)
-        elif re.fullmatch(r"\*?\$?0x[0-9a-f]+", operand):
-            address = int(operand.lstrip("*$"), 16)
-        if address is not None:
-            # Address materialization is an escape, not a memory read.
-            size = (
-                1 if operand.startswith("$") or inst.op.startswith("lea") else _static_width(inst)
-            )
-            ranges.append((address, address + size))
-    return ranges
-
-
-def _touches_slot(inst: Instruction, slot: int, next_address: int | None) -> bool:
-    return any(lo < slot + 8 and slot < hi for lo, hi in _static_ranges(inst, next_address))
-
-
-def _installation(  # noqa: C901, PLR0912, PLR0915 — explicit instruction semantics
-    body: list[Instruction], index: int, selector: int, slots: set[int], incoming_targets: set[int]
-) -> dict[int, int]:
-    """Symbolically follow the selector byte through scale, tables and stores.
-
-    This is deliberately a supported straight-line language, not a compiler
-    template. Unknown operations and any CFG entry bypass fail closed.
+    Values describe full-width identities, not just low bits. Every unsupported
+    effect fails closed; register copies, zero extension and explicit scaling
+    are supported independently of register allocation.
     """
-    start = index - 1
-    while start >= 0 and not BRANCH.fullmatch(body[start].op):
-        start -= 1
-    if start < 0 or body[start].op != "callq" or body[start].target() != selector:
-        raise ValueError("Unproven find slot writer selector")
-    block = body[start + 1 : index + 1]
-    if incoming_targets.intersection(j.address for j in block):
-        raise ValueError("Branch bypasses find installation proof")
-    values = {"%rax": ("byte", 0)}
-    stores = {}
-    for inst in block:
+    values: dict[str, tuple[str, int]] = {}
+    load = mask = branch = table = None
+    for inst in body:
         args = inst.args.split("#", 1)[0].strip()
+        if inst.op in {"nop", "nopl", "nopw"}:
+            continue
+        if branch is not None:
+            raise ValueError("Instruction after find guard tail")
         value = None
-        if inst.op == "movzbl" and (m := re.fullmatch(r"%al, (%\w+)", args)):
-            if values.get("%rax") != ("byte", 0):
-                raise ValueError("Unproven selector byte")
-            dest, value = m[1], ("index", 0)
-        elif inst.op == "shll" and (m := re.fullmatch(r"\$0x3, (%\w+)", args)):
-            dest = m[1]
-            if values.get(_register(dest)) == ("index", 0):
-                value = ("scaled", 0)
-        elif inst.op == "leal" and (m := re.fullmatch(r"\(,(%\w+),8\), (%\w+)", args)):
+        dest = ""
+        if inst.op in {"movzbl", "movb"} and (m := re.fullmatch(r"[-\w]+\(%rip\), (%\w+)", args)):
+            if _reference(inst) != selected:
+                raise ValueError("Find guard does not load selected byte")
+            load = inst.address
+            dest, value = m[1], ("raw", 0)
+        elif inst.op == "movzbl" and (m := re.fullmatch(r"(%\w+), (%\w+)", args)):
+            source = values.get(_register(m[1]))
             dest = m[2]
-            if values.get(m[1]) == ("index", 0):
-                value = ("scaled", 0)
+            if source == ("raw", 0):
+                value = source
+            elif source in {("byte-index", 0), ("index", 0)}:
+                value = ("index", 0)
+        elif inst.op in {"andl", "andq", "andb"} and (
+            m := re.fullmatch(r"\$(0x[0-9a-f]+|[0-9]+), (%\w+)", args)
+        ):
+            dest = m[2]
+            if int(m[1], 0) == 7 and values.get(_register(dest)) == ("raw", 0):
+                mask = inst.address
+                value = ("byte-index" if inst.op == "andb" else "index", 0)
         elif inst.op == "leaq" and (m := re.fullmatch(r"[-\w]+\(%rip\), (%\w+)", args)):
             dest = m[1]
             if (ref := _reference(inst)) is not None:
                 value = ("table", ref)
-        elif inst.op == "movq" and (m := re.fullmatch(r"\((%\w+),(%\w+)\), (%\w+)", args)):
-            dest = m[3]
-            left, right = values.get(m[1]), values.get(m[2])
-            if left == ("scaled", 0) and right is not None and right[0] == "table":
-                value = ("entry", right[1])
-            elif right == ("scaled", 0) and left is not None and left[0] == "table":
-                value = ("entry", left[1])
-        elif inst.op == "movq" and (m := re.fullmatch(r"(%\w+), [-\w]+\(%rip\)", args)):
-            ref = _reference(inst)
-            source = values.get(m[1])
-            if ref not in slots or ref in stores or source is None or source[0] != "entry":
-                raise ValueError("Unproven installation store")
-            stores[ref] = source[1]
-            continue
+        elif inst.op in {"shll", "shlq"} and (m := re.fullmatch(r"\$0x3, (%\w+)", args)):
+            dest = m[1]
+            if values.get(_register(dest)) == ("index", 0):
+                value = ("scaled", 0)
+        elif inst.op in {"leal", "leaq"} and (m := re.fullmatch(r"\(,(%\w+),8\), (%\w+)", args)):
+            dest = m[2]
+            if values.get(m[1]) == ("index", 0):
+                value = ("scaled", 0)
         elif inst.op == "movq" and (m := re.fullmatch(r"(%\w+), (%\w+)", args)):
             dest, value = m[2], values.get(m[1])
-        elif inst.op in {"nop", "nopl", "nopw"}:
-            continue
-        else:
-            raise ValueError("Unsupported find installation instruction")
-        if value is None:
-            raise ValueError("Unproven find table data flow")
+        elif inst.op in {"movq", "jmp", "jmpq"}:
+            operands = _operands(args)
+            operand = operands[0].lstrip("*")
+            if m := re.fullmatch(r"\((%\w+),(%\w+)(?:,([1248]))?\)", operand):
+                base, index = values.get(m[1]), values.get(m[2])
+                scale = int(m[3] or "1")
+                if (
+                    base is not None
+                    and base[0] == "table"
+                    and (
+                        (index == ("index", 0) and scale == 8)
+                        or (index == ("scaled", 0) and scale == 1)
+                    )
+                ):
+                    value = ("entry", base[1])
+            elif inst.op in {"jmp", "jmpq"} and re.fullmatch(r"\*%\w+", args):
+                value = values.get(args[1:])
+            if inst.op == "movq" and len(operands) == 2:
+                dest = operands[1]
+            elif inst.op in {"jmp", "jmpq"} and value is not None and value[0] == "entry":
+                branch, table = inst.address, value[1]
+                continue
+        if value is None or not re.fullmatch(r"%\w+", dest):
+            raise ValueError("Unsupported or unbounded find guard instruction")
+        # A 32-bit destination zeroes its upper half. Partial writes are only
+        # accepted for raw bytes, never for a purported full-width index/base.
+        if (
+            value[0] in {"index", "scaled", "table", "entry"}
+            and dest != _register(dest)
+            and not re.fullmatch(r"%e(?:ax|bx|cx|dx|si|di|bp|sp)|%r\d+d", dest)
+        ):
+            raise ValueError("Partial-width find index")
         values[_register(dest)] = value
-    if set(stores) != slots or len(set(stores.values())) != len(slots):
-        raise ValueError("Unproven memory-table installation")
-    return stores
+    if load is None or mask is None or branch is None or table is None:
+        raise ValueError("Missing bounded find guard tail")
+    if incoming_targets.intersection(range(body[0].address + 1, branch + 1)):
+        raise ValueError("Incoming branch bypasses find guard entry")
+    return {
+        "entry": hex(body[0].address),
+        "byte_load": hex(load),
+        "mask_instruction": hex(mask),
+        "mask": 7,
+        "index_bits": 64,
+        "scale": 8,
+        "branch": hex(branch),
+        "table": hex(table),
+    }
 
 
 def dispatch_proof(elf: Elf, asm: Assembly) -> dict:
-    """Validate the bounded selector, installation data flow and every slot writer."""
-    slot = elf.symbol("x86_64.dispatch.find_fn")
+    """Bind the actual bounded call site to protected storage and eight entries."""
+    selected = elf.symbol("x86_64.dispatch.selected")
     resolver = elf.symbol("x86_64.dispatch.resolveFind")
-    if elf.words(slot, 1) != (resolver,):
-        raise ValueError("Find slot does not initially name resolveFind")
-    selector = elf.symbol("x86_64.cpuid.Info.select")
-    selector_returns(asm.bodies[selector])
-    slots = {elf.symbol("x86_64.dispatch." + n + "_fn") for n in ("copy", "move", "set", "find")}
-    incoming_targets = {
+    guard = elf.symbol("x86_64.dispatch.dispatchFind")
+    incoming = {
         target
         for body in asm.bodies.values()
         for i in body
         if BRANCH.fullmatch(i.op) and (target := i.target()) is not None
     }
-    addresses = sorted(asm.owners)
-    next_addresses = dict(pairwise(addresses))
-    installations = []
-    writers = []
-    for owner, body in asm.bodies.items():
-        for index, inst in enumerate(body):
-            if not _touches_slot(inst, slot, next_addresses.get(inst.address)) or slot_register(
-                inst, slot
-            ):
-                continue
-            if inst.op != "movq" or not re.fullmatch(
-                r"%\w+, [-\w]+\(%rip\)", inst.args.split("#", 1)[0].strip()
-            ):
-                raise ValueError("Unknown find slot access")
-            installations.append(_installation(body, index, selector, slots, incoming_targets))
-            writers.append(hex(owner))
-    if (
-        hex(resolver) not in writers
-        or not installations
-        or any(installation != installations[0] for installation in installations)
-    ):
-        raise ValueError("Different table or slot in find writer")
-    body = asm.bodies[resolver]
-    if not any(
-        i.op in {"jmp", "jmpq"} and dispatch_call(body, n, slot, incoming_targets)
-        for n, i in enumerate(body)
-    ):
-        raise ValueError("Unproven resolver tail target")
-    table = installations[0][slot]
-    targets = elf.words(table, 7)
+    proof = guard_call(asm.bodies[guard], selected, incoming)
+    _, guard_size, kind = elf.symbols["x86_64.dispatch.dispatchFind"][0]
+    if kind != 2 or guard_size == 0:
+        raise ValueError("Unproven find guard function extent")
+    if any(guard < target < guard + guard_size for target in incoming):
+        raise ValueError("Incoming branch bypasses find guard entry")
+    table = int(proof["table"], 16)
+    elf.protected(table, 64)
+    targets = elf.words(table, 8)
     levels = (
         "generic",
         "x86_64_v3",
@@ -442,21 +301,24 @@ def dispatch_proof(elf: Elf, asm: Assembly) -> dict:
         "znver5",
     )
     entries = []
-    for level, target in zip(levels, targets, strict=True):
+    for level, target in zip(levels, targets[:7], strict=True):
         names = [
             name for name in elf.symbols if re.fullmatch(rf"fastmem_find_[0-9a-f]+_{level}", name)
         ]
         if len(names) != 1 or elf.symbol(names[0]) != target or target not in asm.bodies:
             raise ValueError(f"Unproven find table entry: {level}")
         entries.append({"level": level, "symbol": names[0], "address": hex(target)})
+    if targets[7] != resolver or resolver not in asm.bodies:
+        raise ValueError("Unproven find resolver table entry")
+    entries.append(
+        {"level": "unresolved", "symbol": "x86_64.dispatch.resolveFind", "address": hex(resolver)}
+    )
     return {
-        "slot": hex(slot),
-        "initial_resolver": hex(resolver),
-        "table": hex(table),
-        "selector": hex(selector),
+        **proof,
+        "selected_byte": hex(selected),
+        "storage_bytes": 64,
+        "storage_read_only": True,
         "entries": entries,
-        "writers": writers,
-        "installation_tables": {hex(s): hex(t) for s, t in installations[0].items()},
     }
 
 
