@@ -1,0 +1,1905 @@
+{
+  "source_revision": "8bb798790829082f981e3b1830b7216ccf86381e",
+  "runs": [
+    {
+      "mode": "target",
+      "path": "bench-results/20261014T181738Z-find-target-standard",
+      "manifest_sha256": "b00c7a10252be040ed5037bfd71ddafaac7287d0258c50ee1511d72dca397b6a",
+      "summary_sha256": "5f225ace170e63e105c5cf767f2f60a05277540957e97133557ea84b4df1bbf9"
+    },
+    {
+      "mode": "baseline",
+      "path": "bench-results/20261014T182414Z-find-baseline-standard",
+      "manifest_sha256": "14d83015ed2c88ab0ff9fb4536045c17a5ce120ea162195cb7334062f2c0537a",
+      "summary_sha256": "e94e4dccd8d64ba974c05f6d0ac948c43fa21d0d961b1ee65eb5e109b8e993a6"
+    }
+  ],
+  "contract": "docs/find-plan.md",
+  "protocol_acceptance": "pass",
+  "numerical_aggregate_goal": "pass-14-of-14",
+  "performance_scope": "Equal-case stress inventory. Per-case regressions are retained explicitly, not claimed as wins.",
+  "builds": [
+    {
+      "mode": "target",
+      "target": "c7i",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "sapphirerapids",
+      "sha256": "b9a2ee377f137fdfd0f6c7354971d861a9d7e4f27e37e0fa79a5156c6ad633a8",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.000022162842774,
+        "fastmem_direct/std_direct": 0.14450064970606022,
+        "fastmem_fixed/std_fixed": 0.1737572789326972,
+        "fastmem_indirect/fastmem_direct": 1.3454398894575035,
+        "fastmem_indirect/glibc_indirect": 0.3018048892442898,
+        "fastmem_indirect/std_indirect": 0.18308186137834767,
+        "std_indirect/glibc_indirect": 1.648271515374899,
+        "std_indirect/std_direct": 1.0615418059769586
+      },
+      "primary_round_geomeans": [
+        0.14418061649748815,
+        0.14383399449845208,
+        0.1443993794795016,
+        0.14464582573155668,
+        0.14480401337018375,
+        0.14331135791761376
+      ],
+      "noise_floor_range": [
+        0.002266687966437891,
+        0.5218595018604999
+      ],
+      "outliers": 53,
+      "primary_point_regressions": 31,
+      "primary_significant_regressions": 31,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 143,
+        "std_indirect/std_direct": 47,
+        "fastmem_indirect/fastmem_direct": 70,
+        "fastmem_indirect/glibc_indirect": 55,
+        "fastmem_direct/std_direct": 31,
+        "fastmem_indirect/std_indirect": 30
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/uniform/absent/16384/4096",
+          "ratio": 21.469909907618753,
+          "ci95": [
+            21.299135590875,
+            21.677371779068604
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.012565296759823128,
+          "candidate_ns": 1025280.0,
+          "reference_ns": 47913.78048780488
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/4/0",
+          "ratio": 1.6388805933584687,
+          "ci95": [
+            1.5853818650319984,
+            1.664352027195883
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.007672586082849838,
+          "candidate_ns": 3.5488496080782417,
+          "reference_ns": 2.1626780671039136
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/4/0",
+          "ratio": 8.00914490752965,
+          "ci95": [
+            7.895338976754736,
+            8.116756674814939
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.007672586082849838,
+          "candidate_ns": 2.1783304113595805,
+          "reference_ns": 0.27205979953317594
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 5.264333199543623,
+          "ci95": [
+            5.201154152373861,
+            5.3837285165991
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0035678153466232286,
+          "candidate_ns": 875.5964504247544,
+          "reference_ns": 166.534292886928
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/1025/1024",
+          "ratio": 13.565781725375912,
+          "ci95": [
+            13.32311473316803,
+            13.743670604527876
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.009505529084876252,
+          "candidate_ns": 3009.311570615129,
+          "reference_ns": 221.72453386874776
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/1025/1024",
+          "ratio": 13.619213268836482,
+          "ci95": [
+            13.373143222330633,
+            13.851236811196767
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.009505529084876252,
+          "candidate_ns": 3023.710406729355,
+          "reference_ns": 222.79415354838545
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c8i",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "graniterapids",
+      "sha256": "52bffc0da6702ef123e259f3c7d33f616eba8f1cec46974999d0247181e18c59",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0000920962372126,
+        "fastmem_direct/std_direct": 0.13798752265123607,
+        "fastmem_fixed/std_fixed": 0.16207922076509118,
+        "fastmem_indirect/fastmem_direct": 1.3365425353389515,
+        "fastmem_indirect/glibc_indirect": 0.30460123054702065,
+        "fastmem_indirect/std_indirect": 0.17431138401344218,
+        "std_indirect/glibc_indirect": 1.7473384016434454,
+        "std_indirect/std_direct": 1.0582751582071948
+      },
+      "primary_round_geomeans": [
+        0.13837891312284753,
+        0.13775737786935818,
+        0.13805422318319097,
+        0.1380438926978199,
+        0.13791431845923832,
+        0.13643826907358989
+      ],
+      "noise_floor_range": [
+        0.0004918636925157954,
+        0.07900616314065302
+      ],
+      "outliers": 36,
+      "primary_point_regressions": 32,
+      "primary_significant_regressions": 31,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 142,
+        "std_indirect/std_direct": 47,
+        "fastmem_indirect/fastmem_direct": 60,
+        "fastmem_indirect/std_indirect": 32,
+        "fastmem_indirect/glibc_indirect": 58,
+        "fastmem_direct/std_direct": 31
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/uniform/absent/16384/4096",
+          "ratio": 22.684716434167203,
+          "ci95": [
+            22.638166267632833,
+            22.807553790823206
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0020664205836441983,
+          "candidate_ns": 985987.5,
+          "reference_ns": 43422.49456521739
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/0/0",
+          "ratio": 1.6479673160716148,
+          "ci95": [
+            1.6447210306280886,
+            1.651614921001138
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0018573155807263804,
+          "candidate_ns": 3.197922937478641,
+          "reference_ns": 1.941908704803108
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/7/0",
+          "ratio": 7.983383548082767,
+          "ci95": [
+            7.947070234487784,
+            8.000749871062947
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0017700712249409856,
+          "candidate_ns": 2.06851166400744,
+          "reference_ns": 0.2588275802924873
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 12.688718245387784,
+          "ci95": [
+            12.671531773423908,
+            12.70668356985452
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0016330572711347187,
+          "candidate_ns": 9130.38943911593,
+          "reference_ns": 719.5300379367831
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 7.19065379267756,
+          "ci95": [
+            7.157644260630244,
+            7.2122459019271705
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0007097039404827691,
+          "candidate_ns": 824.1361405354864,
+          "reference_ns": 114.65110940486943
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 12.646567919150293,
+          "ci95": [
+            12.605301494293727,
+            12.715276529209456
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0016330572711347187,
+          "candidate_ns": 9128.195904787475,
+          "reference_ns": 722.6890470415681
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c7a",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "znver4",
+      "sha256": "028349ad92dfcf50bf84beb1ff17209edb5d547825fc70b82883f7d8d06715fa",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.000011460206168,
+        "fastmem_direct/std_direct": 0.13656661444696963,
+        "fastmem_fixed/std_fixed": 0.19455805015070354,
+        "fastmem_indirect/fastmem_direct": 1.3813555193530702,
+        "fastmem_indirect/glibc_indirect": 0.3293609294368123,
+        "fastmem_indirect/std_indirect": 0.1790851643359607,
+        "std_indirect/glibc_indirect": 1.8394949567129242,
+        "std_indirect/std_direct": 1.0533550157465008
+      },
+      "primary_round_geomeans": [
+        0.1367118251319857,
+        0.1364727243719066,
+        0.13639559065164372,
+        0.13673962054078204,
+        0.13624301484635623,
+        0.13654514992186664
+      ],
+      "noise_floor_range": [
+        0.00011970351235775827,
+        0.09740377826695767
+      ],
+      "outliers": 82,
+      "primary_point_regressions": 31,
+      "primary_significant_regressions": 31,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 146,
+        "std_indirect/std_direct": 48,
+        "fastmem_indirect/fastmem_direct": 53,
+        "fastmem_indirect/glibc_indirect": 47,
+        "fastmem_direct/std_direct": 31,
+        "fastmem_indirect/std_indirect": 30,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/uniform/absent/16384/4096",
+          "ratio": 17.497549315595865,
+          "ci95": [
+            17.229354102117387,
+            17.67536324084147
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.017512763796106074,
+          "candidate_ns": 804312.75,
+          "reference_ns": 45995.80440199336
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/1/0",
+          "ratio": 1.5426352890413146,
+          "ci95": [
+            1.4020882904297918,
+            1.667386023300181
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.011573961362874896,
+          "candidate_ns": 4.6348223575735386,
+          "reference_ns": 3.054384952595642
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/6/0",
+          "ratio": 10.005449539898942,
+          "ci95": [
+            9.999139559010668,
+            10.014538736425669
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.012300924641445112,
+          "candidate_ns": 2.7276713932356653,
+          "reference_ns": 0.2726130658871656
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 6.5329836810563995,
+          "ci95": [
+            6.495369677945817,
+            6.5595961593983585
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.001658894122441013,
+          "candidate_ns": 1019.4447263476932,
+          "reference_ns": 155.94026333168728
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/absent/262144/4096",
+          "ratio": 11.804773454565039,
+          "ci95": [
+            11.492769219876324,
+            11.893954705697164
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003411827857775424,
+          "candidate_ns": 84659.40217391304,
+          "reference_ns": 7171.62469518338
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/absent/262144/4096",
+          "ratio": 11.797384083338496,
+          "ci95": [
+            11.423785776972585,
+            11.887358344970805
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003411827857775424,
+          "candidate_ns": 84686.26086956522,
+          "reference_ns": 7170.763616879776
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.5014897502390911,
+          "ci95": [
+            1.4976191362868476,
+            1.506242440460452
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0007833359574132507,
+          "candidate_ns": 72.55877269341559,
+          "reference_ns": 48.358831739948904
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c8a",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "znver5",
+      "sha256": "04be8b4c197f38f21e74e68245efd6d25a385cbda4acd721551763b94c57fa8d",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 0.999762160698723,
+        "fastmem_direct/std_direct": 0.13631765117133307,
+        "fastmem_fixed/std_fixed": 0.1985971123041145,
+        "fastmem_indirect/fastmem_direct": 1.4135080718851971,
+        "fastmem_indirect/glibc_indirect": 0.29909642637194145,
+        "fastmem_indirect/std_indirect": 0.18081328518236978,
+        "std_indirect/glibc_indirect": 1.651952354002378,
+        "std_indirect/std_direct": 1.0654378295607323
+      },
+      "primary_round_geomeans": [
+        0.1357256565623927,
+        0.13514472156384036,
+        0.13753664848330405,
+        0.1377161828142207,
+        0.1350321898044404,
+        0.13773780881692674
+      ],
+      "noise_floor_range": [
+        0.00017112272684842016,
+        0.3064589144080376
+      ],
+      "outliers": 105,
+      "primary_point_regressions": 30,
+      "primary_significant_regressions": 30,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 140,
+        "std_indirect/std_direct": 48,
+        "fastmem_indirect/fastmem_direct": 55,
+        "fastmem_indirect/glibc_indirect": 39,
+        "fastmem_direct/std_direct": 30,
+        "fastmem_indirect/std_indirect": 30,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/uniform/absent/16384/4096",
+          "ratio": 11.648858098893273,
+          "ci95": [
+            11.573604389089885,
+            11.710536760162414
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0017681794523606226,
+          "candidate_ns": 406199.6875,
+          "reference_ns": 34771.17105263158
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/6/0",
+          "ratio": 1.5954027353746183,
+          "ci95": [
+            1.586006520457752,
+            1.6061635180547027
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0007611811317089363,
+          "candidate_ns": 3.5661355535536057,
+          "reference_ns": 2.241227223066659
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/2/0",
+          "ratio": 10.001924281706579,
+          "ci95": [
+            9.996458714247037,
+            10.00780148209607
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003401502812468296,
+          "candidate_ns": 2.2283305668600217,
+          "reference_ns": 0.22273310085888573
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 7.430753836525688,
+          "ci95": [
+            7.37153195355521,
+            7.461415869366704
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.002136071219435186,
+          "candidate_ns": 724.4791606867867,
+          "reference_ns": 97.5013279979647
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/absent/262144/1024",
+          "ratio": 14.302613690982566,
+          "ci95": [
+            14.13806310926639,
+            14.417405871098797
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0017974097931837288,
+          "candidate_ns": 74511.00961538462,
+          "reference_ns": 5203.631695941851
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/absent/262144/1024",
+          "ratio": 14.285504708342641,
+          "ci95": [
+            14.111988186276331,
+            14.325687417738008
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0017974097931837288,
+          "candidate_ns": 74538.70192307692,
+          "reference_ns": 5210.244574850635
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.9786087950092033,
+          "ci95": [
+            1.9008448382624166,
+            2.015260117180955
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.000765675607555479,
+          "candidate_ns": 41.805428848016064,
+          "reference_ns": 21.11796130676708
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c7g",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "neoverse_v1",
+      "sha256": "b1d6296ea4d9e053c7b4cc5d3d364e66bd2c62888ce9b35bb01d11ef8d3b9276",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0003145399122153,
+        "fastmem_direct/std_direct": 0.18100353918673803,
+        "fastmem_fixed/std_fixed": 0.3345057979254445,
+        "fastmem_indirect/fastmem_direct": 1.3455291666648386,
+        "fastmem_indirect/glibc_indirect": 0.4832528827069394,
+        "fastmem_indirect/std_indirect": 0.2354807905832466,
+        "std_indirect/glibc_indirect": 2.0523043237715854,
+        "std_indirect/std_direct": 1.0339693968966377
+      },
+      "primary_round_geomeans": [
+        0.18109436860223427,
+        0.1808845050060174,
+        0.18107863643285765,
+        0.18099308770985223,
+        0.1808856025653549,
+        0.18111474857008467
+      ],
+      "noise_floor_range": [
+        0.00013226853908295943,
+        0.10313677460892433
+      ],
+      "outliers": 47,
+      "primary_point_regressions": 32,
+      "primary_significant_regressions": 32,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 162,
+        "std_indirect/std_direct": 21,
+        "fastmem_indirect/fastmem_direct": 74,
+        "fastmem_indirect/glibc_indirect": 85,
+        "fastmem_direct/std_direct": 32,
+        "fastmem_indirect/std_indirect": 40
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 67.04550396043311,
+          "ci95": [
+            66.85381267072876,
+            67.23774489045088
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0074764594643218635,
+          "candidate_ns": 17067190.0,
+          "reference_ns": 254552.42857142858
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/2/0",
+          "ratio": 1.4978104941286838,
+          "ci95": [
+            1.482310611624326,
+            1.513055866590378
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.008335935267829967,
+          "candidate_ns": 4.752420500338758,
+          "reference_ns": 3.1679156394441543
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/7/9",
+          "ratio": 7.003720720311807,
+          "ci95": [
+            6.9951529320816,
+            7.006825937554027
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0012606171778851765,
+          "candidate_ns": 2.696151362371906,
+          "reference_ns": 0.3851433645737403
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 6.485217481136485,
+          "ci95": [
+            6.429842165679908,
+            6.545613262238628
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0073668955947077085,
+          "candidate_ns": 1302.5508208432625,
+          "reference_ns": 201.11229195493877
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.640726184305903,
+          "ci95": [
+            9.415505608150633,
+            9.889850379616885
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.008932840879633657,
+          "candidate_ns": 16137.456347107438,
+          "reference_ns": 1682.5729263779065
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.634926837611715,
+          "ci95": [
+            9.419858847264166,
+            9.854905118147485
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.008932840879633657,
+          "candidate_ns": 16102.662703345773,
+          "reference_ns": 1682.0524107640854
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c8g",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "neoverse_v2",
+      "sha256": "0ffdffaf4bb3982fc30471ee630624109a5d8513e6aefd554ebd392f1038f676",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0009000292231616,
+        "fastmem_direct/std_direct": 0.15890392767604344,
+        "fastmem_fixed/std_fixed": 0.24889371036197708,
+        "fastmem_indirect/fastmem_direct": 1.3217953641851365,
+        "fastmem_indirect/glibc_indirect": 0.4227413690345295,
+        "fastmem_indirect/std_indirect": 0.2033406429658249,
+        "std_indirect/glibc_indirect": 2.077298356642417,
+        "std_indirect/std_direct": 1.0314416531165629
+      },
+      "primary_round_geomeans": [
+        0.15966173526520158,
+        0.15906486874441483,
+        0.15828700822082967,
+        0.157917368182145,
+        0.1585265450002319,
+        0.15974900518744883
+      ],
+      "noise_floor_range": [
+        0.00012697228753703603,
+        0.10010351738184482
+      ],
+      "outliers": 259,
+      "primary_point_regressions": 33,
+      "primary_significant_regressions": 32,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 160,
+        "std_indirect/std_direct": 19,
+        "fastmem_indirect/fastmem_direct": 73,
+        "fastmem_indirect/glibc_indirect": 79,
+        "fastmem_direct/std_direct": 32,
+        "fastmem_indirect/std_indirect": 34
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 54.577833018015916,
+          "ci95": [
+            54.22443030235146,
+            56.93436167803225
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0028551044860523796,
+          "candidate_ns": 12801813.5,
+          "reference_ns": 234879.3125
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/5/0",
+          "ratio": 1.4426730318314613,
+          "ci95": [
+            1.4128261003875653,
+            1.5007165309600436
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0021475372355448663,
+          "candidate_ns": 4.295131430193001,
+          "reference_ns": 3.0273985038132745
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/low/start/4096/0",
+          "ratio": 6.0149159242461705,
+          "ci95": [
+            6.013478629602981,
+            6.022051994672161
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0005851924678651441,
+          "candidate_ns": 2.150560780729112,
+          "reference_ns": 0.3574725683471862
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/periodic/start/4096/127",
+          "ratio": 6.945402242628417,
+          "ci95": [
+            6.939833075153745,
+            7.02230874821854
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0006694661321050223,
+          "candidate_ns": 528.9021260881402,
+          "reference_ns": 76.14854372759797
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.861632214794641,
+          "ci95": [
+            9.35579943544781,
+            9.871567557869238
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004856499154197815,
+          "candidate_ns": 13334.453143176735,
+          "reference_ns": 1351.8308408916484
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.844058769717444,
+          "ci95": [
+            9.360275149325973,
+            9.853295606560964
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004856499154197815,
+          "candidate_ns": 13335.786342281881,
+          "reference_ns": 1354.2746060415661
+        }
+      }
+    },
+    {
+      "mode": "target",
+      "target": "c9g",
+      "run": "bench-results/20261014T181738Z-find-target-standard",
+      "cpu": "neoverse_v3",
+      "sha256": "8dc5aa9bfdcc510f5f49cae1015c639ea5cf11b2401cd2b0237f4e7e4e353849",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.000616484035226,
+        "fastmem_direct/std_direct": 0.1614453953476628,
+        "fastmem_fixed/std_fixed": 0.24836761479680955,
+        "fastmem_indirect/fastmem_direct": 1.3030864980187278,
+        "fastmem_indirect/glibc_indirect": 0.43101238272984255,
+        "fastmem_indirect/std_indirect": 0.2033396668511774,
+        "std_indirect/glibc_indirect": 2.119394406930121,
+        "std_indirect/std_direct": 1.0338856104564884
+      },
+      "primary_round_geomeans": [
+        0.16046840822693192,
+        0.1613180864107692,
+        0.16185818572989064,
+        0.1614219535987614,
+        0.1617056871739399,
+        0.16302962688105876
+      ],
+      "noise_floor_range": [
+        0.0001741156450957278,
+        0.19626116693613052
+      ],
+      "outliers": 176,
+      "primary_point_regressions": 35,
+      "primary_significant_regressions": 35,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 149,
+        "std_indirect/std_direct": 25,
+        "fastmem_indirect/fastmem_direct": 57,
+        "fastmem_indirect/glibc_indirect": 79,
+        "fastmem_direct/std_direct": 35,
+        "fastmem_indirect/std_indirect": 35
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 51.16014490630806,
+          "ci95": [
+            50.48520851163585,
+            51.50035509626223
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.01223261032661607,
+          "candidate_ns": 9995090.25,
+          "reference_ns": 194652.82499999998
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/3/0",
+          "ratio": 1.5838380556413554,
+          "ci95": [
+            1.5702002703829867,
+            1.716432942390708
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004938521560548445,
+          "candidate_ns": 3.8919640663151887,
+          "reference_ns": 2.4782458962439646
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/7/0",
+          "ratio": 6.03170522873666,
+          "ci95": [
+            6.015239324238429,
+            6.03928715752574
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0011082083692389103,
+          "candidate_ns": 1.8315112807803473,
+          "reference_ns": 0.30359519173560673
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/periodic/start/4096/127",
+          "ratio": 7.533584471770539,
+          "ci95": [
+            7.523457197481548,
+            7.682019164863974
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0014034792413899113,
+          "candidate_ns": 433.3492645406013,
+          "reference_ns": 57.53919091972006
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.292726660792846,
+          "ci95": [
+            9.26796068756176,
+            9.301741920934177
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004812682428844515,
+          "candidate_ns": 11526.492996056031,
+          "reference_ns": 1240.8059254415043
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 9.26799711255489,
+          "ci95": [
+            9.246525264416277,
+            9.27573715779363
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004812682428844515,
+          "candidate_ns": 11527.609826589596,
+          "reference_ns": 1243.8040202974175
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c7i",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 0.9987172470691913,
+        "fastmem_direct/std_direct": 0.1743014283864945,
+        "fastmem_fixed/std_fixed": 0.19286244898428714,
+        "fastmem_indirect/fastmem_direct": 1.3658460458194177,
+        "fastmem_indirect/glibc_indirect": 0.3238480148182084,
+        "fastmem_indirect/std_indirect": 0.2221551292666143,
+        "std_indirect/glibc_indirect": 1.4573082534909958,
+        "std_indirect/std_direct": 1.0712913019405321
+      },
+      "primary_round_geomeans": [
+        0.17465137811547424,
+        0.172063664527884,
+        0.17433965296330442,
+        0.17423327692340254,
+        0.17361109097945662,
+        0.1749750025092245
+      ],
+      "noise_floor_range": [
+        0.0014904360029691502,
+        0.108895850782323
+      ],
+      "outliers": 69,
+      "primary_point_regressions": 45,
+      "primary_significant_regressions": 45,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 144,
+        "std_indirect/std_direct": 52,
+        "fastmem_indirect/fastmem_direct": 60,
+        "fastmem_direct/std_direct": 45,
+        "fastmem_indirect/std_indirect": 46,
+        "fastmem_indirect/glibc_indirect": 61,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 43.34759132349189,
+          "ci95": [
+            43.09619915816291,
+            43.74219639850649
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.018436875711688616,
+          "candidate_ns": 9053365.75,
+          "reference_ns": 208320.94444444444
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/0/0",
+          "ratio": 1.7877868190046526,
+          "ci95": [
+            1.7261273450157226,
+            1.8260621991355732
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.009306768925700266,
+          "candidate_ns": 3.425335059399121,
+          "reference_ns": 1.9151704572413624
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/absent/64/0",
+          "ratio": 9.852990114567975,
+          "ci95": [
+            9.706810804624107,
+            9.972473026982808
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.006150847581004637,
+          "candidate_ns": 2.684743718977189,
+          "reference_ns": 0.27302067971458044
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 12.504015895083384,
+          "ci95": [
+            5.242263425357722,
+            12.697800389861484
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.008141838756918865,
+          "candidate_ns": 10543.067961853307,
+          "reference_ns": 842.8615094047175
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/1025/1024",
+          "ratio": 12.440047443984133,
+          "ci95": [
+            12.291181116697597,
+            12.600774867187676
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.010102074047626888,
+          "candidate_ns": 3038.049219069262,
+          "reference_ns": 244.0324127536956
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 5.445298820006187,
+          "ci95": [
+            5.228859560289143,
+            5.483575536211531
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.013387417889741132,
+          "candidate_ns": 901.9503086006882,
+          "reference_ns": 166.4722948145654
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.5430541559646909,
+          "ci95": [
+            1.4773813107938794,
+            1.578305727373391
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.004800413216377071,
+          "candidate_ns": 155.3614488294951,
+          "reference_ns": 100.13486548632014
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c8i",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0003172987366071,
+        "fastmem_direct/std_direct": 0.16271991070917857,
+        "fastmem_fixed/std_fixed": 0.17980405260564608,
+        "fastmem_indirect/fastmem_direct": 1.3881938294611944,
+        "fastmem_indirect/glibc_indirect": 0.3209328485363625,
+        "fastmem_indirect/std_indirect": 0.21059566577340463,
+        "std_indirect/glibc_indirect": 1.5235701107694293,
+        "std_indirect/std_direct": 1.07260664061182
+      },
+      "primary_round_geomeans": [
+        0.16273969534737015,
+        0.16269841899305654,
+        0.16282251478079232,
+        0.16224982062205534,
+        0.16264984879021177,
+        0.16291715928522701
+      ],
+      "noise_floor_range": [
+        0.000307560450958049,
+        0.054281898146632146
+      ],
+      "outliers": 58,
+      "primary_point_regressions": 40,
+      "primary_significant_regressions": 40,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 146,
+        "std_indirect/std_direct": 52,
+        "fastmem_indirect/fastmem_direct": 66,
+        "fastmem_direct/std_direct": 40,
+        "fastmem_indirect/std_indirect": 42,
+        "fastmem_indirect/glibc_indirect": 60,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 38.94339677224036,
+          "ci95": [
+            38.7986964826367,
+            38.96712701709929
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003452816193328967,
+          "candidate_ns": 7645884.25,
+          "reference_ns": 196352.42500000002
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/7/0",
+          "ratio": 1.6949787528410944,
+          "ci95": [
+            1.691722991061046,
+            1.6993546192674491
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.00344713167761237,
+          "candidate_ns": 3.0718108148451435,
+          "reference_ns": 1.8124112936644714
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/low/start/4096/0",
+          "ratio": 9.013664097165718,
+          "ci95": [
+            9.00206681490791,
+            9.02527632009865
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.011223478013561577,
+          "candidate_ns": 2.3293869150830755,
+          "reference_ns": 0.2586761454668146
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 11.53681761082699,
+          "ci95": [
+            11.501099645644738,
+            11.599368587866136
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0008588577531718268,
+          "candidate_ns": 9158.82574043819,
+          "reference_ns": 793.6340473791065
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 11.515058577652605,
+          "ci95": [
+            11.490927299309824,
+            11.533191394831048
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0008588577531718268,
+          "candidate_ns": 9148.372044287464,
+          "reference_ns": 794.4037511560055
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 7.326996752635086,
+          "ci95": [
+            7.297174343940682,
+            7.361663938441685
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.00254213917077926,
+          "candidate_ns": 841.6270402028214,
+          "reference_ns": 114.9346581011852
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.1604894414099405,
+          "ci95": [
+            1.1560892787450388,
+            1.1649063514245788
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0025945595180005307,
+          "candidate_ns": 118.24619450192726,
+          "reference_ns": 101.86029385817861
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c7a",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0002461164099925,
+        "fastmem_direct/std_direct": 0.16042436648771402,
+        "fastmem_fixed/std_fixed": 0.19089073723839348,
+        "fastmem_indirect/fastmem_direct": 1.409713681623184,
+        "fastmem_indirect/glibc_indirect": 0.3301976209454236,
+        "fastmem_indirect/std_indirect": 0.2137935205324226,
+        "std_indirect/glibc_indirect": 1.5455387094170026,
+        "std_indirect/std_direct": 1.0580849033443278
+      },
+      "primary_round_geomeans": [
+        0.16009261502728242,
+        0.16081629637507613,
+        0.15988590207130193,
+        0.16060304020377864,
+        0.1606743358863938,
+        0.15995943940215337
+      ],
+      "noise_floor_range": [
+        0.0002204378666434689,
+        0.10927074918253346
+      ],
+      "outliers": 96,
+      "primary_point_regressions": 44,
+      "primary_significant_regressions": 44,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 149,
+        "std_indirect/std_direct": 51,
+        "fastmem_indirect/fastmem_direct": 63,
+        "fastmem_indirect/glibc_indirect": 49,
+        "fastmem_direct/std_direct": 44,
+        "fastmem_indirect/std_indirect": 46,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 44.71826398154698,
+          "ci95": [
+            44.580865007635275,
+            46.182607477944266
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003447307995150828,
+          "candidate_ns": 8637829.5,
+          "reference_ns": 193481.625
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/2/2",
+          "ratio": 1.4617275013679112,
+          "ci95": [
+            1.4600030223042537,
+            1.4633114577960589
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0010033299973693716,
+          "candidate_ns": 5.182409045632454,
+          "reference_ns": 3.5452853596966474
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/0/0",
+          "ratio": 11.006174703930288,
+          "ci95": [
+            10.991832532109195,
+            11.026080910194088
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0008345677404716081,
+          "candidate_ns": 2.9999887457731624,
+          "reference_ns": 0.2726877898895714
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 6.486389361547779,
+          "ci95": [
+            6.390294997715536,
+            6.513565096588459
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.007167302560515754,
+          "candidate_ns": 1014.4774220265099,
+          "reference_ns": 156.17141264902972
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 12.236480494110385,
+          "ci95": [
+            9.201608200154844,
+            12.260667709774733
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0008529422377188225,
+          "candidate_ns": 12505.715408805032,
+          "reference_ns": 1021.8634731096821
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/prefix/start/32768/4096",
+          "ratio": 12.232259415736786,
+          "ci95": [
+            9.472791246494683,
+            12.24911950142417
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0008529422377188225,
+          "candidate_ns": 12512.270980738995,
+          "reference_ns": 1022.7333052644226
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.602746563949928,
+          "ci95": [
+            1.5919517000725614,
+            1.6142624634580462
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0005448436920550693,
+          "candidate_ns": 184.3965798824936,
+          "reference_ns": 115.14426796074656
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c8a",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 0.9989647568027863,
+        "fastmem_direct/std_direct": 0.14656918718630368,
+        "fastmem_fixed/std_fixed": 0.18449307202010398,
+        "fastmem_indirect/fastmem_direct": 1.4620988803134516,
+        "fastmem_indirect/glibc_indirect": 0.2939761568333476,
+        "fastmem_indirect/std_indirect": 0.20023489565921795,
+        "std_indirect/glibc_indirect": 1.4676090510513922,
+        "std_indirect/std_direct": 1.0704669119555703
+      },
+      "primary_round_geomeans": [
+        0.144879861769547,
+        0.14722916800898295,
+        0.14624562638073008,
+        0.14724540988171433,
+        0.1479395878200946,
+        0.14712254873128325
+      ],
+      "noise_floor_range": [
+        0.0001236658212764256,
+        0.16940692544219227
+      ],
+      "outliers": 210,
+      "primary_point_regressions": 38,
+      "primary_significant_regressions": 38,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 150,
+        "std_indirect/std_direct": 53,
+        "fastmem_indirect/fastmem_direct": 87,
+        "fastmem_indirect/glibc_indirect": 40,
+        "fastmem_direct/std_direct": 38,
+        "fastmem_indirect/std_indirect": 43,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 51.78944831149937,
+          "ci95": [
+            51.63245109284207,
+            52.15622941161183
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.009723488470835486,
+          "candidate_ns": 8074428.5,
+          "reference_ns": 156039.8958333333
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/6/3",
+          "ratio": 1.602865404550285,
+          "ci95": [
+            1.538522932864797,
+            1.6149578932458557
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.019186535307566702,
+          "candidate_ns": 4.56652848492581,
+          "reference_ns": 2.8960645983410744
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/5/9",
+          "ratio": 10.006132599289357,
+          "ci95": [
+            9.996190208638922,
+            10.00966133194858
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0007996636224590601,
+          "candidate_ns": 2.2279558046009633,
+          "reference_ns": 0.22267991664074793
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 7.921685266708812,
+          "ci95": [
+            7.895596241290213,
+            8.464240807764437
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0004883982306448461,
+          "candidate_ns": 775.5790905543074,
+          "reference_ns": 97.89121362181619
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 12.19742738125421,
+          "ci95": [
+            11.646064472359816,
+            12.75556583238435
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.04413856919081812,
+          "candidate_ns": 8993.207908976055,
+          "reference_ns": 733.2289563267839
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 12.143342756636224,
+          "ci95": [
+            11.592234202248143,
+            12.702220757598438
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.04413856919081812,
+          "candidate_ns": 8997.912264428285,
+          "reference_ns": 738.4152303680473
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.6270865803486039,
+          "ci95": [
+            1.6248468107276726,
+            1.629329437379328
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.00035791273449320703,
+          "candidate_ns": 99.1213321974644,
+          "reference_ns": 60.89927703709358
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c7g",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0004812715892213,
+        "fastmem_direct/std_direct": 0.24816519559049574,
+        "fastmem_fixed/std_fixed": 0.3421922757955434,
+        "fastmem_indirect/fastmem_direct": 1.3613729126162044,
+        "fastmem_indirect/glibc_indirect": 0.549611409146801,
+        "fastmem_indirect/std_indirect": 0.3177568276172638,
+        "std_indirect/glibc_indirect": 1.7297741766534724,
+        "std_indirect/std_direct": 1.0634240174103804
+      },
+      "primary_round_geomeans": [
+        0.2478405283298119,
+        0.24849998066880175,
+        0.24783306425706833,
+        0.24854229224761007,
+        0.2446161828763795,
+        0.2484283883457564
+      ],
+      "noise_floor_range": [
+        0.0001450797379302199,
+        0.10091842294704102
+      ],
+      "outliers": 58,
+      "primary_point_regressions": 48,
+      "primary_significant_regressions": 48,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 140,
+        "std_indirect/std_direct": 30,
+        "fastmem_indirect/fastmem_direct": 81,
+        "fastmem_indirect/glibc_indirect": 88,
+        "fastmem_direct/std_direct": 48,
+        "fastmem_indirect/std_indirect": 48
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 58.23772935121602,
+          "ci95": [
+            58.01465370535841,
+            58.878067739707284
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.004029593269045381,
+          "candidate_ns": 14739741.25,
+          "reference_ns": 253432.89285714287
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/5/0",
+          "ratio": 1.5566950400113653,
+          "ci95": [
+            1.5550111131403757,
+            1.5585530056139238
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0010453432394426348,
+          "candidate_ns": 3.929097690016956,
+          "reference_ns": 2.5237671221187825
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/1/3",
+          "ratio": 7.002739930024072,
+          "ci95": [
+            7.000521154552326,
+            7.005383512856696
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0005515052857590974,
+          "candidate_ns": 2.69530768668328,
+          "reference_ns": 0.38494937231440396
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 12.448955365759629,
+          "ci95": [
+            12.383921593376357,
+            12.514322254159229
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0013621217853455978,
+          "candidate_ns": 2509.89214522984,
+          "reference_ns": 201.44461506828105
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 18.584237464743865,
+          "ci95": [
+            18.513345907102973,
+            18.611035747806433
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.01336376226508097,
+          "candidate_ns": 36115.45909090909,
+          "reference_ns": 1943.7198527576786
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 18.559021026704944,
+          "ci95": [
+            18.486480591528537,
+            18.596914510610098
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.01336376226508097,
+          "candidate_ns": 36140.586363636365,
+          "reference_ns": 1947.0612782361616
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c8g",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.0009621858174402,
+        "fastmem_direct/std_direct": 0.21267712869028005,
+        "fastmem_fixed/std_fixed": 0.271148556733058,
+        "fastmem_indirect/fastmem_direct": 1.3227325538500145,
+        "fastmem_indirect/glibc_indirect": 0.4889809925896641,
+        "fastmem_indirect/std_indirect": 0.2696975147808729,
+        "std_indirect/glibc_indirect": 1.8131502581961938,
+        "std_indirect/std_direct": 1.0422276336241463
+      },
+      "primary_round_geomeans": [
+        0.21326647522717612,
+        0.21187396192451866,
+        0.21294785264669916,
+        0.2126368844886344,
+        0.2137275161877518,
+        0.21246730412202725
+      ],
+      "noise_floor_range": [
+        0.00017684271750703688,
+        0.059955042331761986
+      ],
+      "outliers": 264,
+      "primary_point_regressions": 48,
+      "primary_significant_regressions": 47,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 157,
+        "std_indirect/std_direct": 31,
+        "fastmem_indirect/fastmem_direct": 77,
+        "fastmem_indirect/glibc_indirect": 84,
+        "fastmem_direct/std_direct": 47,
+        "fastmem_indirect/std_indirect": 48,
+        "fastmem_fixed/std_fixed": 1
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 43.19797782305938,
+          "ci95": [
+            43.09131592956105,
+            45.99982681062654
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0033545096330214416,
+          "candidate_ns": 10112903.25,
+          "reference_ns": 233740.1875
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/2/2",
+          "ratio": 1.3743380633719806,
+          "ci95": [
+            1.3642444324480363,
+            1.3774192481676788
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.00020217401154209435,
+          "candidate_ns": 3.934884990530966,
+          "reference_ns": 2.8617907253218853
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/6/0",
+          "ratio": 6.011583672675294,
+          "ci95": [
+            6.006258811326309,
+            6.0146688837479365
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0005172794020365121,
+          "candidate_ns": 2.148443170434635,
+          "reference_ns": 0.3574299898132395
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/text/start/4096/256",
+          "ratio": 14.507318335020921,
+          "ci95": [
+            14.464379025385245,
+            14.535122860396225
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.000721210023098797,
+          "candidate_ns": 2195.9087791181855,
+          "reference_ns": 151.31757071579227
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 17.83625309604896,
+          "ci95": [
+            17.811298841345106,
+            17.852113201156342
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0014500767088970591,
+          "candidate_ns": 31656.649925595237,
+          "reference_ns": 1773.9242708116592
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 17.872892259971426,
+          "ci95": [
+            17.830670544801244,
+            17.936100366030068
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0014500767088970591,
+          "candidate_ns": 31641.694444444445,
+          "reference_ns": 1770.2404259160471
+        },
+        "fastmem_fixed/std_fixed": {
+          "case": "find/fixed/text/end/4096/1",
+          "ratio": 1.3649199436958595,
+          "ci95": [
+            1.2236917986319902,
+            1.5322177355660849
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.027680899209853053,
+          "candidate_ns": 156.82308049504138,
+          "reference_ns": 119.09118705838225
+        }
+      }
+    },
+    {
+      "mode": "baseline",
+      "target": "c9g",
+      "run": "bench-results/20261014T182414Z-find-baseline-standard",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "protocol": "PASS",
+      "means": {
+        "A/A": 1.000485000115134,
+        "fastmem_direct/std_direct": 0.21559660957880072,
+        "fastmem_fixed/std_fixed": 0.25332989135569706,
+        "fastmem_indirect/fastmem_direct": 1.3047954946775573,
+        "fastmem_indirect/glibc_indirect": 0.49010405619239483,
+        "fastmem_indirect/std_indirect": 0.2708909255119643,
+        "std_indirect/glibc_indirect": 1.8097270339507883,
+        "std_indirect/std_direct": 1.037968097422444
+      },
+      "primary_round_geomeans": [
+        0.21560048886387645,
+        0.21644534848636943,
+        0.21635993878115686,
+        0.21489180704914365,
+        0.20962146047049438,
+        0.21590195400910048
+      ],
+      "noise_floor_range": [
+        0.000384154207737458,
+        0.12810250211925145
+      ],
+      "outliers": 194,
+      "primary_point_regressions": 46,
+      "primary_significant_regressions": 45,
+      "regression_counts": {
+        "std_indirect/glibc_indirect": 141,
+        "std_indirect/std_direct": 28,
+        "fastmem_indirect/fastmem_direct": 61,
+        "fastmem_indirect/glibc_indirect": 87,
+        "fastmem_direct/std_direct": 45,
+        "fastmem_indirect/std_indirect": 45
+      },
+      "worst": {
+        "std_indirect/glibc_indirect": {
+          "case": "find/runtime/prefix/absent/65536/4096",
+          "ratio": 38.07378481476594,
+          "ci95": [
+            37.60111675673554,
+            38.341487617435085
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.005376091016570076,
+          "candidate_ns": 7421619.0,
+          "reference_ns": 194361.2
+        },
+        "std_indirect/std_direct": {
+          "case": "find/runtime/random/end/3/3",
+          "ratio": 1.3764641812882992,
+          "ci95": [
+            1.3749925008585973,
+            1.4529057970446497
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0022515743610889358,
+          "candidate_ns": 3.340705454990223,
+          "reference_ns": 2.428801791245424
+        },
+        "fastmem_indirect/fastmem_direct": {
+          "case": "find/runtime/random/end/5/0",
+          "ratio": 6.024182206652817,
+          "ci95": [
+            6.008714060948463,
+            6.030991101764705
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.002067970958113338,
+          "candidate_ns": 1.8284081316526044,
+          "reference_ns": 0.30349802860363256
+        },
+        "fastmem_indirect/glibc_indirect": {
+          "case": "find/runtime/periodic/start/4096/127",
+          "ratio": 14.837948560116965,
+          "ci95": [
+            14.670604127368303,
+            15.027835384807537
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.003939269827792111,
+          "candidate_ns": 846.2801719279391,
+          "reference_ns": 57.28814220748623
+        },
+        "fastmem_direct/std_direct": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 17.34590025065738,
+          "ci95": [
+            17.303693316433016,
+            17.431445968393863
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0027002351226496496,
+          "candidate_ns": 25592.696761571762,
+          "reference_ns": 1475.831026334601
+        },
+        "fastmem_indirect/std_indirect": {
+          "case": "find/runtime/rare/end/4097/4096",
+          "ratio": 17.33717841346497,
+          "ci95": [
+            17.29310042965748,
+            17.36824929472722
+          ],
+          "ci_level": 0.96875,
+          "noise_floor": 0.0027002351226496496,
+          "candidate_ns": 25579.1858974359,
+          "reference_ns": 1476.0628456537884
+        }
+      }
+    }
+  ],
+  "primary_regression_family_counts": {
+    "packed-short": 26,
+    "early-long-match": 98,
+    "other-two-way": 104,
+    "near-absence": 55,
+    "near-equal-long": 42,
+    "rare-absence": 41,
+    "tiny-haystack": 156,
+    "single-byte": 7
+  },
+  "our_significant_regressions": 1996,
+  "primary_significant_regressions": 529,
+  "confidence_note": "Individual signed-rank coverage is 0.96875. Intervals have no simultaneous multiplicity correction.",
+  "parent_checks": [
+    {
+      "mode": "target",
+      "target": "c8a",
+      "cpu": "znver5",
+      "sha256": "04be8b4c197f38f21e74e68245efd6d25a385cbda4acd721551763b94c57fa8d",
+      "primary_geomean": 0.13631765117133307,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c7a",
+      "cpu": "znver4",
+      "sha256": "028349ad92dfcf50bf84beb1ff17209edb5d547825fc70b82883f7d8d06715fa",
+      "primary_geomean": 0.13656661444696963,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c8i",
+      "cpu": "graniterapids",
+      "sha256": "52bffc0da6702ef123e259f3c7d33f616eba8f1cec46974999d0247181e18c59",
+      "primary_geomean": 0.13798752265123607,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c7i",
+      "cpu": "sapphirerapids",
+      "sha256": "b9a2ee377f137fdfd0f6c7354971d861a9d7e4f27e37e0fa79a5156c6ad633a8",
+      "primary_geomean": 0.14450064970606022,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c9g",
+      "cpu": "neoverse_v3",
+      "sha256": "8dc5aa9bfdcc510f5f49cae1015c639ea5cf11b2401cd2b0237f4e7e4e353849",
+      "primary_geomean": 0.1614453953476628,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c8g",
+      "cpu": "neoverse_v2",
+      "sha256": "0ffdffaf4bb3982fc30471ee630624109a5d8513e6aefd554ebd392f1038f676",
+      "primary_geomean": 0.15890392767604344,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "target",
+      "target": "c7g",
+      "cpu": "neoverse_v1",
+      "sha256": "b1d6296ea4d9e053c7b4cc5d3d364e66bd2c62888ce9b35bb01d11ef8d3b9276",
+      "primary_geomean": 0.18100353918673803,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c8a",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "primary_geomean": 0.14656918718630368,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c9g",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "primary_geomean": 0.21559660957880072,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c8i",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "primary_geomean": 0.16271991070917857,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c7a",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "primary_geomean": 0.16042436648771402,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c7i",
+      "cpu": "x86_64",
+      "sha256": "53001665040ce2f2ac3d609539503d51b7e8f32c5d1878fde37ba39d3ef741b2",
+      "primary_geomean": 0.1743014283864945,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c8g",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "primary_geomean": 0.21267712869028005,
+      "protocol": "pass",
+      "raw_rounds": 12
+    },
+    {
+      "mode": "baseline",
+      "target": "c7g",
+      "cpu": "generic",
+      "sha256": "08d6ebea84346bf5e9c383b87fad16074a9474a5f3e82d6387e0577de360ddcd",
+      "primary_geomean": 0.24816519559049574,
+      "protocol": "pass",
+      "raw_rounds": 12
+    }
+  ],
+  "diagnostic_source_sha256": "d7a0ce8c51b9466c7461cbe034f7ad88571fd667e04158d58adbb0533f97c6c5",
+  "diagnostics": {
+    "kind": "Untimed logical operation counts. These are not ISA timings or a universal complexity proof.",
+    "cases": 262,
+    "source_revision": "8bb798790829082f981e3b1830b7216ccf86381e",
+    "source_sha256": "d7a0ce8c51b9466c7461cbe034f7ad88571fd667e04158d58adbb0533f97c6c5",
+    "patch_sha256": "c7454579db2b824093a7d0a7eb6d6d785a412fbdf37594a6b9dbd64c735a48af",
+    "counts_sha256": "7b80666546c0604cfe276a085cf5ccd39092cad709b41f819c355ede351a0a35",
+    "commands": [
+      "zig run -O ReleaseSafe .bench-cache/find-regression-diagnostics/probe.zig",
+      "zig run -O ReleaseSafe .bench-cache/find-regression-diagnostics/probe_equal.zig"
+    ],
+    "files": {
+      "kernel.zig": "0015248c71f621f05c19c72ee8dc517c8a243e618b60bac6c37d0da0e1099f1b",
+      "kernel32.zig": "4473c517a7a1d3030518404b44a14a780d94db9d347096e8b3193f71c702f7f3",
+      "probe.zig": "a7941f2e56c135efeeed26660a262d9583b2da48866bd7a6c2fbc9c3c71f303c",
+      "probe_equal.zig": "b5be8e9df0506acab55b5b4b96cc7c0d05d15b52806bc0b1d1dcae89a5018d27",
+      "find/rank.zig": "910e20129e8b077994b675ee04b4bc5f82bf07f6868f326d052666821aaca109"
+    },
+    "new_equal_controls": 6,
+    "original_cases_repeated": false,
+    "nonzero_memory_resets": 0,
+    "note": "Rare/prefix/near data reproduce the benchmark formulas. The uniform byte sweep is a separate control. Width32 executes on ARM as logical vectors and is not an x86 timing.",
+    "patch_format": "Zero-context unified diff. Apply with git apply --unidiff-zero after the source hash check."
+  },
+  "cleanup": {
+    "completed_at_utc": "2026-10-14T18:48:28.358673+00:00",
+    "account": "396684171460",
+    "region": "us-west-2",
+    "owner": "find-20261014T175934Z-8bb7987",
+    "owned_instances_terminated": 7,
+    "receipt": ".bench-cache/find-replacement-teardown.json"
+  },
+  "parent_disposition": {
+    "decision": "Accept the numerical goal with explicit retained per-case regressions for the initial candidate.",
+    "report": "docs/results/find-standard-20261014.md",
+    "regression_file": "docs/results/find-standard-20261014-regressions.tsv",
+    "universal_speedup_claim": false,
+    "new_kernel_changes": false
+  }
+}

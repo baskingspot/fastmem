@@ -2,6 +2,8 @@
 
 Fast `memcpy`, `memmove`, and `memset` for Zig.
 
+For byte searches, `find` replaces `std.mem.find` without a libc dependency.
+
 Zig code gets these operations from compiler-rt. compiler-rt's `memset` is
 a byte loop, and its `memcpy` and `memmove` are slower than glibc on most
 CPUs. fastmem replaces them with kernels that are tuned per CPU model and
@@ -38,6 +40,23 @@ fastmem.set(u8, dest, 0);
 The functions are `inline`. Small sizes compile to straight-line code at
 the call site. Larger sizes call the kernel directly, with no PLT and no
 ifunc. `copy`, `move`, and `set` are generic over the element type.
+
+### Subslice search
+
+```zig
+const index = fastmem.find(u8, "banana", "ana"); // Returns index 1.
+```
+
+`find(comptime T: type, haystack: []const T, needle: []const T) ?usize` returns the first element index or `null`.
+An empty needle matches at index zero.
+Only `u8` has an optimized kernel.
+Other element types and comptime calls use `std.mem.find`.
+The kernel permits overlapping slices and keeps every read within both slices.
+It needs no allocator and exports no `memmem` symbol.
+
+The [search results](docs/results/find-standard-20261014.md) include the measured aggregate gains and retained slow cases.
+`docs/find-plan.md` defines the contract.
+`THIRD_PARTY.md` records the Rust memchr port and its MIT notice.
 
 ### Replace the symbols (opt in)
 

@@ -1,0 +1,249 @@
+--- a/.bench-cache/find-regression-diagnostics/kernel.zig
++++ b/.bench-cache/find-regression-diagnostics/kernel.zig
+@@ -15 +15 @@
+-const width = if (builtin.cpu.arch == .x86_64 and builtin.cpu.has(.x86, .avx2)) 32 else 16;
++const width = 16;
+@@ -48,0 +49 @@
++        metrics.equal_blocks += 1;
+@@ -51,0 +53 @@
++        metrics.equal_scalars += 1;
+@@ -61,0 +64 @@
++        metrics.byte_blocks += 1;
+@@ -65 +68,4 @@
+-    for (haystack[pos..], pos..) |b, i| if (b == byte) return i;
++    for (haystack[pos..], pos..) |b, i| {
++        metrics.byte_scalars += 1;
++        if (b == byte) return i;
++    }
+@@ -92,0 +99 @@
++    metrics.rank_bytes += @min(needle.len, 255);
+@@ -124,0 +132 @@
++    metrics.pair_blocks += 1;
+@@ -225,0 +234 @@
++        metrics.suffix_comparisons += 1;
+@@ -282,0 +292 @@
++        metrics.disable_transitions += 1;
+@@ -286,0 +297,2 @@
++        metrics.prefilter_attempts += 1;
++        metrics.prefilter_skipped += skipped;
+@@ -296 +308,4 @@
+-    for (needle) |byte| byteset |= @as(u64, 1) << @as(u6, @truncate(byte));
++    for (needle) |byte| {
++        metrics.byteset_bytes += 1;
++        byteset |= @as(u64, 1) << @as(u6, @truncate(byte));
++    }
+@@ -301,0 +317 @@
++        metrics.search_iterations += 1;
+@@ -307,0 +324 @@
++            metrics.erased_memory += @intFromBool(memory != 0);
+@@ -314 +331 @@
+-            while (i < needle.len and needle[i] == haystack[pos + i]) : (i += 1) {}
++            while (i < needle.len and diagnosticRight(needle[i], haystack[pos + i])) : (i += 1) {}
+@@ -320 +337 @@
+-                while (j > memory and needle[j - 1] == haystack[pos + j - 1]) : (j -= 1) {}
++                while (j > memory and diagnosticLeft(needle[j - 1], haystack[pos + j - 1])) : (j -= 1) {}
+@@ -543,0 +561,28 @@
++
++pub const diagnostic_width = width;
++pub var metrics: Metrics = .{};
++pub const Metrics = struct {
++    rank_bytes: u64 = 0,
++    suffix_comparisons: u64 = 0,
++    byteset_bytes: u64 = 0,
++    equal_blocks: u64 = 0,
++    equal_scalars: u64 = 0,
++    pair_blocks: u64 = 0,
++    byte_blocks: u64 = 0,
++    byte_scalars: u64 = 0,
++    search_iterations: u64 = 0,
++    prefilter_attempts: u64 = 0,
++    prefilter_skipped: u64 = 0,
++    disable_transitions: u64 = 0,
++    erased_memory: u64 = 0,
++    right_comparisons: u64 = 0,
++    left_comparisons: u64 = 0,
++};
++fn diagnosticRight(a: u8, b: u8) bool {
++    metrics.right_comparisons += 1;
++    return a == b;
++}
++fn diagnosticLeft(a: u8, b: u8) bool {
++    metrics.left_comparisons += 1;
++    return a == b;
++}
+--- a/.bench-cache/find-regression-diagnostics/kernel32.zig
++++ b/.bench-cache/find-regression-diagnostics/kernel32.zig
+@@ -15 +15 @@
+-const width = if (builtin.cpu.arch == .x86_64 and builtin.cpu.has(.x86, .avx2)) 32 else 16;
++const width = 32;
+@@ -48,0 +49 @@
++        metrics.equal_blocks += 1;
+@@ -51,0 +53 @@
++        metrics.equal_scalars += 1;
+@@ -61,0 +64 @@
++        metrics.byte_blocks += 1;
+@@ -65 +68,4 @@
+-    for (haystack[pos..], pos..) |b, i| if (b == byte) return i;
++    for (haystack[pos..], pos..) |b, i| {
++        metrics.byte_scalars += 1;
++        if (b == byte) return i;
++    }
+@@ -92,0 +99 @@
++    metrics.rank_bytes += @min(needle.len, 255);
+@@ -124,0 +132 @@
++    metrics.pair_blocks += 1;
+@@ -225,0 +234 @@
++        metrics.suffix_comparisons += 1;
+@@ -282,0 +292 @@
++        metrics.disable_transitions += 1;
+@@ -286,0 +297,2 @@
++        metrics.prefilter_attempts += 1;
++        metrics.prefilter_skipped += skipped;
+@@ -296 +308,4 @@
+-    for (needle) |byte| byteset |= @as(u64, 1) << @as(u6, @truncate(byte));
++    for (needle) |byte| {
++        metrics.byteset_bytes += 1;
++        byteset |= @as(u64, 1) << @as(u6, @truncate(byte));
++    }
+@@ -301,0 +317 @@
++        metrics.search_iterations += 1;
+@@ -307,0 +324 @@
++            metrics.erased_memory += @intFromBool(memory != 0);
+@@ -314 +331 @@
+-            while (i < needle.len and needle[i] == haystack[pos + i]) : (i += 1) {}
++            while (i < needle.len and diagnosticRight(needle[i], haystack[pos + i])) : (i += 1) {}
+@@ -320 +337 @@
+-                while (j > memory and needle[j - 1] == haystack[pos + j - 1]) : (j -= 1) {}
++                while (j > memory and diagnosticLeft(needle[j - 1], haystack[pos + j - 1])) : (j -= 1) {}
+@@ -543,0 +561,28 @@
++
++pub const diagnostic_width = width;
++pub var metrics: Metrics = .{};
++pub const Metrics = struct {
++    rank_bytes: u64 = 0,
++    suffix_comparisons: u64 = 0,
++    byteset_bytes: u64 = 0,
++    equal_blocks: u64 = 0,
++    equal_scalars: u64 = 0,
++    pair_blocks: u64 = 0,
++    byte_blocks: u64 = 0,
++    byte_scalars: u64 = 0,
++    search_iterations: u64 = 0,
++    prefilter_attempts: u64 = 0,
++    prefilter_skipped: u64 = 0,
++    disable_transitions: u64 = 0,
++    erased_memory: u64 = 0,
++    right_comparisons: u64 = 0,
++    left_comparisons: u64 = 0,
++};
++fn diagnosticRight(a: u8, b: u8) bool {
++    metrics.right_comparisons += 1;
++    return a == b;
++}
++fn diagnosticLeft(a: u8, b: u8) bool {
++    metrics.left_comparisons += 1;
++    return a == b;
++}
+--- /dev/null
++++ b/.bench-cache/find-regression-diagnostics/probe.zig
+@@ -0,0 +1,83 @@
++const std = @import("std");
++const kernel16 = @import("kernel.zig");
++const kernel32 = @import("kernel32.zig");
++const Family = enum { rare_absent, rare_end, rare_equal, prefix_start, near_absent, uniform_byte_end };
++var hay_buffer: [1048576 + 64]u8 align(64) = undefined;
++var needle_buffer: [4096 + 64]u8 align(64) = undefined;
++
++pub fn diagnostic(
++    writer: *std.Io.Writer,
++    comptime kernel: type,
++    family: Family,
++    hlen: usize,
++    nlen: usize,
++    offset: usize,
++) !void {
++    std.debug.assert(hlen <= 1048576);
++    std.debug.assert(nlen <= 4096);
++    std.debug.assert(offset <= 63);
++    const h = hay_buffer[offset..][0..hlen];
++    const n = needle_buffer[63 - offset ..][0..nlen];
++    switch (family) {
++        .rare_absent, .rare_end, .rare_equal => {
++            for (h, 0..) |*byte, i| byte.* = @intCast(i % 255);
++            for (n, 0..) |*byte, i| byte.* = @intCast(i % 255);
++            n[300] = 255;
++        },
++        .near_absent => {
++            for (n, 0..) |*byte, i| byte.* = @as(u8, @intCast(i % 13)) + 'a';
++            for (h, 0..) |*byte, i| {
++                byte.* = n[i % nlen];
++                if (i % nlen == nlen / 2) byte.* ^= 128;
++            }
++        },
++        .prefix_start, .uniform_byte_end => {
++            @memset(h, 'a');
++            @memset(n, 'a');
++            n[nlen - 1] = 'z';
++        },
++    }
++    const expected: ?usize = switch (family) {
++        .rare_absent, .near_absent => null,
++        .prefix_start, .rare_equal => 0,
++        .rare_end, .uniform_byte_end => hlen - nlen,
++    };
++    if (expected) |pos| @memcpy(h[pos..][0..nlen], n);
++    std.debug.assert(std.mem.find(u8, h, n) == expected);
++    kernel.metrics = .{};
++    const actual = kernel.find(h, n);
++    std.debug.assert(actual == expected);
++    try std.json.Stringify.value(.{
++        .family = @tagName(family),
++        .width = kernel.diagnostic_width,
++        .hlen = hlen,
++        .nlen = nlen,
++        .hay_offset = offset,
++        .needle_offset = 63 - offset,
++        .answer = actual,
++        .metrics = kernel.metrics,
++    }, .{}, writer);
++    try writer.writeByte('\n');
++}
++
++pub fn main(init: std.process.Init) !void {
++    var buffer: [32768]u8 = undefined;
++    var file_writer: std.Io.File.Writer = .init(.stdout(), init.io, &buffer);
++    const writer = &file_writer.interface;
++    inline for (.{ kernel16, kernel32 }) |kernel| {
++        for ([_]usize{ 512, 1024, 4096 }) |nlen| {
++            for ([_]usize{ 65536, 131072, 262144, 1048576 }) |hlen|
++                try diagnostic(writer, kernel, .rare_absent, hlen, nlen, 0);
++            for ([_]usize{ 1, 2, 16 }) |delta|
++                try diagnostic(writer, kernel, .rare_end, nlen + delta, nlen, 0);
++            try diagnostic(writer, kernel, .prefix_start, 32768, nlen, 0);
++        }
++        for ([_]usize{ 33, 257, 1024, 4096 }) |nlen|
++            for ([_]usize{ 65536, 131072, 262144, 1048576 }) |hlen|
++                try diagnostic(writer, kernel, .near_absent, hlen, nlen, 0);
++        for ([_]usize{ 15, 16, 17, 31, 32, 33, 63, 64, 65, 4095, 4096 }) |hlen|
++            for ([_]usize{ 0, 1, 15, 16, 17, 31, 32, 63 }) |offset|
++                try diagnostic(writer, kernel, .uniform_byte_end, hlen, 1, offset);
++    }
++    try writer.flush();
++}
+--- /dev/null
++++ b/.bench-cache/find-regression-diagnostics/probe_equal.zig
+@@ -0,0 +1,14 @@
++const std = @import("std");
++const probe = @import("probe.zig");
++const kernel16 = @import("kernel.zig");
++const kernel32 = @import("kernel32.zig");
++
++pub fn main(init: std.process.Init) !void {
++    var buffer: [8192]u8 = undefined;
++    var file_writer: std.Io.File.Writer = .init(.stdout(), init.io, &buffer);
++    const writer = &file_writer.interface;
++    inline for (.{ kernel16, kernel32 }) |kernel|
++        for ([_]usize{ 512, 1024, 4096 }) |nlen|
++            try probe.diagnostic(writer, kernel, .rare_equal, nlen, nlen, 0);
++    try writer.flush();
++}
