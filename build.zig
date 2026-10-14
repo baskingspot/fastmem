@@ -328,6 +328,38 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| guard_cmd.addArgs(args);
     b.step("test-guard", "Run the full guard-page matrix").dependOn(&guard_cmd.step);
 
+    const find_guard = b.addExecutable(.{
+        .name = "fastmem-find-tests",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tests/find.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{.{ .name = "fastmem", .module = mod }},
+        }),
+    });
+    const install_find_guard = b.addInstallArtifact(find_guard, .{});
+    b.getInstallStep().dependOn(&install_find_guard.step);
+    b.step("find-test-bin", "Install the search guard binary").dependOn(&install_find_guard.step);
+    const find_guard_cmd = b.addRunArtifact(find_guard);
+    if (b.args) |args| find_guard_cmd.addArgs(args);
+    b.step("test-find-guard", "Run the search guard matrix").dependOn(&find_guard_cmd.step);
+
+    const find_unit = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tests/find_fuzz.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "fastmem", .module = mod }},
+        }),
+    });
+    const find_unit_cmd = b.addRunArtifact(find_unit);
+    b.step("test-find", "Run search unit and fuzz tests").dependOn(&find_unit_cmd.step);
+    const install_find_unit = b.addInstallArtifact(find_unit, .{
+        .dest_sub_path = "fastmem-find-unit-tests",
+    });
+    b.step("test-find-unit-bin", "Install search unit tests").dependOn(&install_find_unit.step);
+
     // Assembly output for codegen inspection.
     addAsmStep(b, fm, target, "asm", "Emit assembly for the current (or -Dtarget) target");
 
@@ -384,6 +416,8 @@ pub fn build(b: *std.Build) void {
     // one file imported by two modules) only shows up when they build.
     test_step.dependOn(&bench_exe.step);
     test_step.dependOn(&correctness.step);
+    test_step.dependOn(&find_guard.step);
+    test_step.dependOn(&find_unit_cmd.step);
     test_step.dependOn(&libc_probe.step);
     test_step.dependOn(&run_mod_tests.step);
 
