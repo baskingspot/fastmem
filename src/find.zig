@@ -495,6 +495,34 @@ test "pair offset limit and vector minimum boundaries" {
     }
 }
 
+test "guard seam values select the intended prefix offsets" {
+    var needle: [4096]u8 = undefined;
+    for ([_]usize{ 2, 3, 15, 16, 17, 31, 32, 33, 254, 255, 256, 257, 512, 4096 }) |len| {
+        for ([_]usize{ 0, (len - 1) / 2, @min(len - 1, 254), @min(len - 1, 255) }) |wanted| {
+            const limit = @min(len, 255);
+            const first = @min(wanted, limit - 1);
+            const second = (first + 1) % limit;
+            @memset(needle[0..len], ' ');
+            needle[first] = 1;
+            needle[second] = 0;
+            const pair = selectPair(needle[0..len]);
+            try testing.expectEqual(first, @as(usize, pair.first));
+            try testing.expectEqual(second, @as(usize, pair.second));
+        }
+    }
+}
+
+test "only rare byte beyond the automatic prefix stays unselected" {
+    var haystack: [1024]u8 = @splat(' ');
+    var needle: [512]u8 = @splat(' ');
+    needle[needle.len - 1] = 1;
+    try testing.expect(rank[1] < rank[' ']);
+    try testing.expectEqual(Pair{ .first = 0, .second = 1 }, selectPair(&needle));
+    try testing.expectEqual(@as(?usize, null), find(&haystack, &needle));
+    @memcpy(haystack[512..], &needle);
+    try testing.expectEqual(@as(?usize, 512), find(&haystack, &needle));
+}
+
 test "lane masks preserve ascending memory order" {
     var bytes: [64]u8 = @splat(0);
     for (0..32) |lane| {

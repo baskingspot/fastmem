@@ -91,6 +91,23 @@ pub fn fixedNeedle(comptime len: u32) [len]u8 {
     return result;
 }
 
+pub const SeamOffsets = struct { first: u8, second: u8 };
+
+pub fn seamOffsets(nlen: usize, wanted: usize) SeamOffsets {
+    const limit = @min(nlen, 255);
+    const first = @min(wanted, limit -| 1);
+    const second = if (limit > 1) (first + 1) % limit else first;
+    return .{ .first = @intCast(first), .second = @intCast(second) };
+}
+
+pub fn prepareSeam(needle: []u8, wanted: usize) void {
+    const offsets = seamOffsets(needle.len, wanted);
+    @memset(needle, ' ');
+    // These ranks are lower than the fill rank, in this order.
+    if (needle.len > 0) needle[offsets.first] = 1;
+    if (needle.len > 1) needle[offsets.second] = 0;
+}
+
 pub const Structured = enum {
     period1,
     period2,
@@ -113,7 +130,12 @@ pub fn prepareStructured(haystack: []u8, needle: []u8, kind: Structured) void {
     for (needle, 0..) |*byte, i| byte.* = @intCast(i % period);
     if (needle.len == 0) return;
     switch (kind) {
-        .near_period, .prefix, .rare_late => needle[needle.len - 1] = 0xff,
+        .near_period, .prefix => needle[needle.len - 1] = 0xff,
+        .rare_late => {
+            @memset(haystack, ' ');
+            @memset(needle, ' ');
+            needle[needle.len - 1] = 1;
+        },
         .suffix => needle[0] = 0xff,
         .collisions => {
             @memset(haystack, 0x40);

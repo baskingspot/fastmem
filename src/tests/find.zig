@@ -497,8 +497,8 @@ fn seams(hwindow: Guarded, nwindow: Guarded) !void {
         for ([_]u32{ 16, 32, 64 }) |width| {
             const last = nlen -| 1;
             for ([_]u32{ 0, last / 2, @min(last, 254), @min(last, 255) }) |rare| {
-                const second = if (nlen > 2) (rare + 1) % nlen else rare;
-                const minload = @max(nlen, @max(rare, second) + width);
+                const offsets = cases.seamOffsets(nlen, rare);
+                const minload = @max(nlen, @as(u32, @max(offsets.first, offsets.second)) + width);
                 const lengths = [_]u32{
                     minload - 1,          minload,              minload + 1,
                     nlen + width - 2,     nlen + width - 1,     nlen + width,
@@ -528,12 +528,10 @@ fn seamOne(hwindow: Guarded, nwindow: Guarded, rare: u32, implant: u32, c: Case)
     try protect(nwindow, .writable);
     const haystack = slice(hwindow, c.hside, c.hlen, 0);
     const needle = slice(nwindow, c.nside, c.nlen, 0);
-    // High-ranked values at distinct positions stress shifted pair loads.
+    // Low ranks select the intended offsets within the automatic prefix.
     // Early near-candidates and the final hit exercise ascending lane order.
-    @memset(haystack, 'a');
-    @memset(needle, 'a');
-    if (needle.len > 0) needle[rare] = 0xff;
-    if (needle.len > 2) needle[(rare + 1) % needle.len] = 0xfe;
+    @memset(haystack, ' ');
+    cases.prepareSeam(needle, rare);
     if (needle.len <= haystack.len and implant == 1) {
         @memcpy(haystack[0..needle.len], needle);
         if (needle.len > 2) haystack[needle.len - 1] ^= 1;
