@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from fastmem_bench.codegen import inspect
+from fastmem_bench.find_audit import CALLS, HEADER, INSTRUCTION, Assembly, backedges
 from fastmem_bench.jsonl import parse_text, verify_probe
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -166,18 +167,73 @@ def test_native_shared_indirect_loop_and_compiler_rt() -> None:
             "llvm-objdump",
             "-d",
             "--source",
+            "--no-show-raw-insn",
             "--disassemble-symbols=" + ",".join(loops),
             str(BINARY),
         ],
         text=True,
     )
-    # The C function pointer path remains indirect after ReleaseFast optimization.
-    call_sites = disassembly.split("function(dst, src, len);")[1:]
-    assert call_sites
-    for site in call_sites:
-        # Clock callbacks also use indirect calls. Match only the memory operation site.
-        instructions = "\n".join(site.splitlines()[:6])
-        assert re.search(r"\bblr\s+x\d+|\bcallq?\s+\*", instructions)
+    assert_shared_memory_calls(disassembly, loops)
+
+
+def assert_shared_memory_calls(disassembly: str, loops: list[str]) -> None:
+    # Source statements can have discontiguous instruction ranges: argument
+    # setup may precede intervening sequence-selection annotations. Associate
+    # actual calls with their source statement within each function boundary,
+    # rather than requiring a call in every fixed-size source fragment.
+    asm = Assembly(disassembly)
+    owner = None
+    memory_statement = False
+    marked_owners = set()
+    memory_instructions = set()
+    for line in disassembly.splitlines():
+        if header := HEADER.match(line):
+            owner = int(header[1], 16)
+            memory_statement = False
+        elif line.startswith(";"):
+            memory_statement = "function(dst, src, len);" in line
+            if memory_statement:
+                assert owner is not None
+                marked_owners.add(owner)
+        elif memory_statement and (instruction := INSTRUCTION.match(line)):
+            memory_instructions.add(int(instruction[1], 16))
+    assert marked_owners
+    for owner in marked_owners:
+        assert asm.names[owner] in loops
+        body = asm.bodies[owner]
+        calls = [i for i in body if i.address in memory_instructions and i.op in CALLS]
+        assert calls
+        intervals = backedges(body)
+        for call in calls:
+            # Clock callbacks cannot satisfy a source-tagged memory call, and
+            # each shared indirect operation must execute inside a loop.
+            assert call.op in {"blr", "call", "callq"}
+            assert call.target() is None
+            assert any(lo <= call.address <= hi for lo, hi in intervals)
+
+
+def test_memory_call_removal_cannot_use_remaining_clocks() -> None:
+    disassembly = """00001000 <loop>:
+;         return io.vtable.now(io.userdata, clock);
+ 1000: blr x9
+;                 _ = if (op == .set) function(dst, set_value, len) else function(dst, src, len);
+ 1004: mov w1, #0xa5
+;         const entry = if (case.seq) |seq| seq[iteration & (seq_len - 1)] else Entry{
+ 1008: ldr w23, [x8]
+;                 _ = if (op == .set) function(dst, set_value, len) else function(dst, src, len);
+ 100c: mov x2, x23
+ 1010: blr x25
+;     for (0..iters) |iteration| {
+ 1014: b.ne 0x1004 <loop+0x4>
+;         return io.vtable.now(io.userdata, clock);
+ 1018: blr x9
+ 101c: ret
+"""
+    assert_shared_memory_calls(disassembly, ["loop"])
+    clock_only = disassembly.replace("1010: blr x25", "1010: nop")
+    assert clock_only.count("blr x9") == 2
+    with pytest.raises(AssertionError):
+        assert_shared_memory_calls(clock_only, ["loop"])
 
 
 def test_native_codegen_evidence_is_bound_to_the_executable(tmp_path: Path) -> None:
