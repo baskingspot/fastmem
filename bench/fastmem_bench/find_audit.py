@@ -11,7 +11,11 @@ from pathlib import Path
 
 HEADER = re.compile(r"^([0-9a-f]+) <(.+)>:$")
 INSTRUCTION = re.compile(r"^\s*([0-9a-f]+):\s+([a-z0-9_.]+)\s*(.*?)\s*$")
-BRANCH = re.compile(r"callq?|j\w+|loop\w*|xbegin|blr?|b(?:\.\w+)?|br|cbn?z|tbn?z")
+ARM_AUTH_CALLS = {"blraa", "blrab", "blraaz", "blrabz"}
+ARM_AUTH_TAILS = {"braa", "brab", "braaz", "brabz"}
+CALLS = {"call", "callq", "bl", "blr", *ARM_AUTH_CALLS}
+TAILS = {"jmp", "jmpq", "b", "br", *ARM_AUTH_TAILS}
+BRANCH = re.compile(r"callq?|j\w+|loop\w*|xbegin|blr?|b(?:\.\w+)?|br|bl?ra[ab]z?|cbn?z|tbn?z")
 DIRECT = re.compile(r"(?:^|,\s*)(?:0x)?([0-9a-f]+)(?:\s+<([^>]+)>)?$")
 
 
@@ -23,7 +27,7 @@ class Instruction:
     text: str
 
     def target(self) -> int | None:
-        if self.op in {"br", "blr"} or self.args.startswith("*"):
+        if self.op in {"br", "blr", *ARM_AUTH_CALLS, *ARM_AUTH_TAILS} or self.args.startswith("*"):
             return None
         match = DIRECT.search(self.args)
         return int(match[1], 16) if match else None
@@ -115,36 +119,47 @@ def backedges(body: list[Instruction]) -> list[tuple[int, int]]:
         (target, i.address)
         for i in body
         if BRANCH.fullmatch(i.op)
-        and i.op not in {"call", "callq", "bl"}
+        and i.op not in CALLS
         and (target := i.target()) is not None
         and target in addresses
         and target <= i.address
     ]
 
 
-def slot_load(instruction: Instruction, slot: int) -> bool:
+def slot_register(instruction: Instruction, slot: int) -> str | None:
     match = re.fullmatch(
-        r"movq\s+[-\w]+\(%rip\), %rax\s+# (0x[0-9a-f]+) <[^>]+>",
+        r"movq\s+[-\w]+\(%rip\), (%\w+)\s+# (0x[0-9a-f]+) <[^>]+>",
         instruction.op + " " + instruction.args,
     )
-    return bool(match and int(match[1], 16) == slot)
+    return match[1] if match and int(match[2], 16) == slot else None
 
 
-def dispatch_call(body: list[Instruction], index: int, slot: int) -> bool:
+def dispatch_call(
+    body: list[Instruction], index: int, slot: int, incoming_targets: set[int] | None = None
+) -> bool:
     """Prove the branch register comes from this slot in the same basic block."""
-    if body[index].op not in {"callq", "jmpq", "jmp"} or body[index].args != "*%rax":
+    inst = body[index]
+    if inst.op not in {"callq", "jmpq", "jmp"} or not re.fullmatch(r"\*%\w+", inst.args):
         return False
-    for instruction in reversed(body[:index]):
-        if slot_load(instruction, slot):
-            bypass = {
-                i.address for i in body if instruction.address < i.address <= body[index].address
-            }
-            return not any(i.target() in bypass for i in body if BRANCH.fullmatch(i.op))
-        if BRANCH.fullmatch(instruction.op) or re.search(
-            r"%[re]?ax\b|%al\b|%ah\b", instruction.args
-        ):
-            return False
-    return False
+    values: dict[str, str | None] = {}
+    for instruction in body[:index]:
+        if BRANCH.fullmatch(instruction.op):
+            values.clear()
+        elif register := slot_register(instruction, slot):
+            values[register] = f"slot:{instruction.address}"
+        else:
+            _clock_step(instruction, values, -1)
+    source = values.get(inst.args[1:])
+    if source is None or not source.startswith("slot:"):
+        return False
+    load = int(source.partition(":")[2])
+    bypass = {i.address for i in body if load < i.address <= inst.address}
+    targets = (
+        incoming_targets
+        if incoming_targets is not None
+        else {target for i in body if BRANCH.fullmatch(i.op) and (target := i.target()) is not None}
+    )
+    return not targets.intersection(bypass)
 
 
 def selector_returns(body: list[Instruction]) -> set[int]:  # noqa: C901, PLR0912
@@ -242,58 +257,116 @@ def selector_returns(body: list[Instruction]) -> set[int]:  # noqa: C901, PLR091
     return returns
 
 
-def dispatch_proof(elf: Elf, asm: Assembly) -> dict:  # noqa: C901, PLR0912, PLR0915
+def _reference(inst: Instruction) -> int | None:
+    match = re.search(r"# (0x[0-9a-f]+) <", inst.args)
+    return int(match[1], 16) if match else None
+
+
+def _installation(  # noqa: C901, PLR0912, PLR0915 — explicit instruction semantics
+    body: list[Instruction], index: int, selector: int, slots: set[int], incoming_targets: set[int]
+) -> dict[int, int]:
+    """Symbolically follow the selector byte through scale, tables and stores.
+
+    This is deliberately a supported straight-line language, not a compiler
+    template. Unknown operations and any CFG entry bypass fail closed.
+    """
+    start = index - 1
+    while start >= 0 and not BRANCH.fullmatch(body[start].op):
+        start -= 1
+    if start < 0 or body[start].op != "callq" or body[start].target() != selector:
+        raise ValueError("Unproven find slot writer selector")
+    block = body[start + 1 : index + 1]
+    if incoming_targets.intersection(j.address for j in block):
+        raise ValueError("Branch bypasses find installation proof")
+    values = {"%rax": ("byte", 0)}
+    stores = {}
+    for inst in block:
+        args = inst.args.split("#", 1)[0].strip()
+        value = None
+        if inst.op == "movzbl" and (m := re.fullmatch(r"%al, (%\w+)", args)):
+            if values.get("%rax") != ("byte", 0):
+                raise ValueError("Unproven selector byte")
+            dest, value = m[1], ("index", 0)
+        elif inst.op == "shll" and (m := re.fullmatch(r"\$0x3, (%\w+)", args)):
+            dest = m[1]
+            if values.get(_register(dest)) == ("index", 0):
+                value = ("scaled", 0)
+        elif inst.op == "leal" and (m := re.fullmatch(r"\(,(%\w+),8\), (%\w+)", args)):
+            dest = m[2]
+            if values.get(m[1]) == ("index", 0):
+                value = ("scaled", 0)
+        elif inst.op == "leaq" and (m := re.fullmatch(r"[-\w]+\(%rip\), (%\w+)", args)):
+            dest = m[1]
+            if (ref := _reference(inst)) is not None:
+                value = ("table", ref)
+        elif inst.op == "movq" and (m := re.fullmatch(r"\((%\w+),(%\w+)\), (%\w+)", args)):
+            dest = m[3]
+            left, right = values.get(m[1]), values.get(m[2])
+            if left == ("scaled", 0) and right is not None and right[0] == "table":
+                value = ("entry", right[1])
+            elif right == ("scaled", 0) and left is not None and left[0] == "table":
+                value = ("entry", left[1])
+        elif inst.op == "movq" and (m := re.fullmatch(r"(%\w+), [-\w]+\(%rip\)", args)):
+            ref = _reference(inst)
+            source = values.get(m[1])
+            if ref not in slots or ref in stores or source is None or source[0] != "entry":
+                raise ValueError("Unproven installation store")
+            stores[ref] = source[1]
+            continue
+        elif inst.op == "movq" and (m := re.fullmatch(r"(%\w+), (%\w+)", args)):
+            dest, value = m[2], values.get(m[1])
+        elif inst.op in {"nop", "nopl", "nopw"}:
+            continue
+        else:
+            raise ValueError("Unsupported find installation instruction")
+        if value is None:
+            raise ValueError("Unproven find table data flow")
+        values[_register(dest)] = value
+    if set(stores) != slots or len(set(stores.values())) != len(slots):
+        raise ValueError("Unproven memory-table installation")
+    return stores
+
+
+def dispatch_proof(elf: Elf, asm: Assembly) -> dict:
     """Validate the bounded selector, installation data flow and every slot writer."""
     slot = elf.symbol("x86_64.dispatch.find_fn")
     resolver = elf.symbol("x86_64.dispatch.resolveFind")
     if elf.words(slot, 1) != (resolver,):
         raise ValueError("Find slot does not initially name resolveFind")
-    body = asm.bodies[resolver]
     selector = elf.symbol("x86_64.cpuid.Info.select")
     selector_returns(asm.bodies[selector])
-    calls = [n for n, i in enumerate(body) if i.op == "callq" and i.target() == selector]
-    if len(calls) != 1:
-        raise ValueError("Unproven find selector call")
-    tail = body[calls[0] + 1 :]
-    # Verify the actual data path: AL -> byte index -> pointer-size scale,
-    # then the fourth table -> RAX -> find_fn -> indirect tail jump.
-    normalized = [i.op + " " + i.args.split("#", 1)[0].strip() for i in tail]
-    if normalized[:2] != ["movzbl %al, %eax", "shll $0x3, %eax"]:
-        raise ValueError("Unproven find table index")
-    if len(tail) != 28:
-        raise ValueError("Unrecognized find installation sequence")
-    for n, register in zip((2, 4, 6, 8), ("rcx", "rdx", "rsi", "rdi"), strict=True):
-        if not re.fullmatch(rf"leaq [-\w]+\(%rip\), %{register}", normalized[n]):
-            raise ValueError("Unproven find table base")
-        dest = "rax" if n == 8 else register
-        if normalized[n + 1] != f"movq (%rax,%{register}), %{dest}":
-            raise ValueError("Unproven find table load")
-    for n, register, name in (
-        (10, "rcx", "copy_fn"),
-        (11, "rdx", "move_fn"),
-        (12, "rsi", "set_fn"),
+    slots = {elf.symbol("x86_64.dispatch." + n + "_fn") for n in ("copy", "move", "set", "find")}
+    incoming_targets = {
+        target
+        for body in asm.bodies.values()
+        for i in body
+        if BRANCH.fullmatch(i.op) and (target := i.target()) is not None
+    }
+    installations = []
+    writers = []
+    for owner, body in asm.bodies.items():
+        for index, inst in enumerate(body):
+            if _reference(inst) != slot or slot_register(inst, slot):
+                continue
+            if inst.op != "movq" or not re.fullmatch(
+                r"%\w+, [-\w]+\(%rip\)", inst.args.split("#", 1)[0].strip()
+            ):
+                raise ValueError("Unknown find slot access")
+            installations.append(_installation(body, index, selector, slots, incoming_targets))
+            writers.append(hex(owner))
+    if (
+        hex(resolver) not in writers
+        or not installations
+        or any(installation != installations[0] for installation in installations)
     ):
-        reference = re.search(r"# (0x[0-9a-f]+) <", tail[n].args)
-        if (
-            not re.fullmatch(rf"movq %{register}, [-\w]+\(%rip\)", normalized[n])
-            or reference is None
-            or int(reference[1], 16) != elf.symbol("x86_64.dispatch." + name)
-        ):
-            raise ValueError("Unproven intervening installation instruction")
-    if not re.fullmatch(r"movq %rax, [-\w]+\(%rip\)", normalized[13]):
-        raise ValueError("Unproven find slot store")
-    reference = re.search(r"# (0x[0-9a-f]+) <", tail[13].args)
-    if reference is None or int(reference[1], 16) != slot or not slot_load(tail[14], slot):
-        raise ValueError("Wrong find installation slot")
-    if not dispatch_call(body, len(body) - 2, slot):
+        raise ValueError("Different table or slot in find writer")
+    body = asm.bodies[resolver]
+    if not any(
+        i.op in {"jmp", "jmpq"} and dispatch_call(body, n, slot, incoming_targets)
+        for n, i in enumerate(body)
+    ):
         raise ValueError("Unproven resolver tail target")
-    # No bypass may enter the validated installation sequence.
-    if any(i.target() in {j.address for j in tail} for i in body if BRANCH.fullmatch(i.op)):
-        raise ValueError("Branch bypasses find installation proof")
-    table_match = re.search(r"# (0x[0-9a-f]+) <", tail[8].args)
-    if table_match is None:
-        raise ValueError("Missing find table address")
-    table = int(table_match[1], 16)
+    table = installations[0][slot]
     targets = elf.words(table, 7)
     levels = (
         "generic",
@@ -312,42 +385,6 @@ def dispatch_proof(elf: Elf, asm: Assembly) -> dict:  # noqa: C901, PLR0912, PLR
         if len(names) != 1 or elf.symbol(names[0]) != target or target not in asm.bodies:
             raise ValueError(f"Unproven find table entry: {level}")
         entries.append({"level": level, "symbol": names[0], "address": hex(target)})
-    writers = []
-    for owner, instructions in asm.bodies.items():
-        for index, instruction in enumerate(instructions):
-            reference = re.search(r"# (0x[0-9a-f]+) <", instruction.args)
-            if reference is None or int(reference[1], 16) != slot:
-                continue
-            if slot_load(instruction, slot):
-                continue
-            # Every statically addressed writer, including the memory resolvers,
-            # must use the same validated table-to-slot installation sequence.
-            if instruction.op != "movq" or not instruction.args.startswith("%rax,"):
-                raise ValueError("Unknown find slot access")
-            start = index - 14
-            if (
-                start < 0
-                or instructions[start].op != "callq"
-                or instructions[start].target() != selector
-            ):
-                raise ValueError("Unproven find slot writer selector")
-            block = instructions[start + 1 : index + 1]
-            for actual, expected in zip(block, tail[:14], strict=True):
-                actual_code = actual.op + " " + actual.args.split("#", 1)[0].strip()
-                expected_code = expected.op + " " + expected.args.split("#", 1)[0].strip()
-                if re.sub(r"-?0x[0-9a-f]+\(%rip\)", "RIP", actual_code) != re.sub(
-                    r"-?0x[0-9a-f]+\(%rip\)", "RIP", expected_code
-                ):
-                    raise ValueError("Unproven find slot writer data flow")
-                if expected.args.partition("#")[2] != actual.args.partition("#")[2]:
-                    raise ValueError("Different table or slot in find writer")
-            if any(
-                i.target() in {j.address for j in block}
-                for i in instructions
-                if BRANCH.fullmatch(i.op)
-            ):
-                raise ValueError("Branch bypasses find writer proof")
-            writers.append(hex(owner))
     return {
         "slot": hex(slot),
         "initial_resolver": hex(resolver),
@@ -355,16 +392,59 @@ def dispatch_proof(elf: Elf, asm: Assembly) -> dict:  # noqa: C901, PLR0912, PLR
         "selector": hex(selector),
         "entries": entries,
         "writers": writers,
+        "installation_tables": {hex(s): hex(t) for s, t in installations[0].items()},
     }
 
 
-def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -> bool:  # noqa: C901, PLR0912
+def _register(operand: str) -> str:
+    """Canonicalize GPR aliases, including partial writes."""
+    for register, aliases in {
+        "%rax": ("%eax", "%ax", "%al", "%ah"),
+        "%rbx": ("%ebx", "%bx", "%bl", "%bh"),
+        "%rcx": ("%ecx", "%cx", "%cl", "%ch"),
+        "%rdx": ("%edx", "%dx", "%dl", "%dh"),
+        "%rsi": ("%esi", "%si", "%sil"),
+        "%rdi": ("%edi", "%di", "%dil"),
+        "%rbp": ("%ebp", "%bp", "%bpl"),
+        "%rsp": ("%esp", "%sp", "%spl"),
+    }.items():
+        if operand in aliases:
+            return register
+    if match := re.fullmatch(r"(%r\d+)[dwb]", operand):
+        return match[1]
+    if re.fullmatch(r"w\d+", operand):
+        return "x" + operand[1:]
+    return operand
+
+
+def _operands(args: str) -> list[str]:
+    # Commas within addressing expressions are not operand boundaries.
+    return re.split(r",\s*(?![^([]*[)\]])", args) if args else []
+
+
+def _forget(values: dict[str, str | None], dest: str) -> None:
+    dest = _register(dest)
+    values.pop(dest, None)
+    if dest in {"%rbp", "%rsp"}:
+        for key in list(values):
+            if "(" in key:
+                values.pop(key)
+
+
+def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -> bool:  # noqa: C901, PLR0911, PLR0912, PLR0915
+    """Interpret only explicit supported operand semantics.
+
+    Unknown instructions/operand forms discard ALL identities (including
+    spills). Thus multi-destination, implicit and writeback clobbers cannot
+    accidentally retain an Io identity. Authenticated calls are never exempt.
+    """
     args = inst.args.split("# ", 1)[0].split("//", 1)[0].strip()
-    if inst.op in {"callq", "call", "blr"}:
+    operands = _operands(args)
+    if inst.op in CALLS:
         callback = None
         if inst.op == "blr":
             callback = values.get(args)
-        elif (
+        elif inst.op in {"call", "callq"} and (
             (match := re.fullmatch(r"\*(0x[0-9a-f]+)\((%\w+)\)", args))
             and int(match[1], 16) == offset
             and values.get(match[2]) == "vtable"
@@ -381,47 +461,124 @@ def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -
             "%r10",
             "%r11",
             *(f"x{n}" for n in range(19)),
+            "x30",
         ):
             values.pop(register, None)
         return callback == "now"
-    if inst.op == "movq" and (match := re.fullmatch(r"(.+), (%\w+|-?0x[0-9a-f]+\(%rbp\))", args)):
-        source, dest = match.groups()
+    if inst.op.startswith("loop") or inst.op == "xbegin":
+        values.clear()
+        return False
+    if BRANCH.fullmatch(inst.op) or inst.op in {"ret", "retq", "nop", "nopl", "nopw"}:
+        return False
+    if inst.op == "movq" and len(operands) == 2:
+        source, dest = operands
         value = values.get(source)
         if load := re.fullmatch(r"0x8\((%\w+)\)", source):
             value = "vtable" if values.get(load[1]) == "io" else None
-        values[dest] = value
-    elif inst.op == "mov" and (match := re.fullmatch(r"(x\d+), (x\d+)", args)):
-        values[match[1]] = values.get(match[2])
-    elif inst.op == "ldp" and (match := re.fullmatch(r"(x\d+), (x\d+), \[(x\d+)\]", args)):
-        value = values.get(match[3])
-        values[match[1]] = None
-        values[match[2]] = "vtable" if value == "io" else None
-    elif inst.op == "ldr" and (match := re.fullmatch(r"(x\d+), \[(x\d+), #?(0x[0-9a-f]+)\]", args)):
-        values[match[1]] = (
-            "now" if values.get(match[2]) == "vtable" and int(match[3], 16) == offset else None
-        )
-    elif not BRANCH.fullmatch(inst.op) and not inst.op.startswith(
-        ("cmp", "test", "str", "stp", "push")
+        if re.fullmatch(r"%r\w+|-?0x[0-9a-f]+\(%rbp\)", dest):
+            _forget(values, dest)
+            if value is not None:
+                values[dest] = value
+            return False
+        # An untracked memory write might alias a tracked spill.
+        for key in list(values):
+            if "(" in key:
+                values.pop(key)
+        return False
+    if inst.op == "mov" and (m := re.fullmatch(r"(x\d+), (x\d+)", args)):
+        value = values.get(m[2])
+        _forget(values, m[1])
+        if value is not None:
+            values[m[1]] = value
+        return False
+    if inst.op == "ldp" and (
+        m := re.fullmatch(r"(x\d+), (x\d+), \[(x\d+|sp)(?:, #?-?0x[0-9a-f]+)?\]", args)
     ):
-        # Invalidate other register writes; handle subregisters as aliases.
-        dest = args.rsplit(", ", 1)[-1] if "%" in args else args.split(", ", 1)[0]
-        for register, aliases in {
-            "%rax": ("%eax", "%ax", "%al", "%ah"),
-            "%rbx": ("%ebx", "%bx", "%bl", "%bh"),
-            "%rcx": ("%ecx", "%cx", "%cl", "%ch"),
-            "%rdx": ("%edx", "%dx", "%dl", "%dh"),
-            "%rsi": ("%esi", "%si", "%sil"),
-            "%rdi": ("%edi", "%di", "%dil"),
-            "%rbp": ("%ebp", "%bp", "%bpl"),
-            "%rsp": ("%esp", "%sp", "%spl"),
-        }.items():
-            if dest in aliases:
-                dest = register
-        if match := re.fullmatch(r"(%r\d+)[dwb]", dest):
-            dest = match[1]
-        if re.fullmatch(r"w\d+", dest):
-            dest = "x" + dest[1:]
-        values.pop(dest, None)
+        value = values.get(m[3])
+        _forget(values, m[1])
+        _forget(values, m[2])
+        if value == "io" and args.endswith("[" + m[3] + "]"):
+            values[m[2]] = "vtable"
+        return False
+    if inst.op == "ldr" and (
+        m := re.fullmatch(r"(x\d+), \[(x\d+|sp)(?:, #?(0x[0-9a-f]+))?\]", args)
+    ):
+        value = values.get(m[2])
+        _forget(values, m[1])
+        if value == "vtable" and m[3] is not None and int(m[3], 16) == offset:
+            values[m[1]] = "now"
+        return False
+    # Read-only flag operations have no GPR destinations.
+    if inst.op in {"cmp", "testq", "testl", "testb", "cmpq", "cmpl", "cmpb"} and len(operands) == 2:
+        return False
+    # ARM stores without writeback do not write any GPR. Writeback forms,
+    # exclusive stores and unrecognized loads fall through to total invalidation.
+    if inst.op in {"str", "stp"} and re.fullmatch(
+        r"(?:[xw]\d+, ){1,2}\[(?:x\d+|sp)(?:, #?-?0x[0-9a-f]+)?\]", args
+    ):
+        return False
+    # Exact opcode sets, not prefix/last-operand guesses: these forms have
+    # one explicit destination and no implicit GPR writes.
+    if (
+        inst.op
+        in {
+            "movl",
+            "movb",
+            "movw",
+            "movzbl",
+            "leaq",
+            "leal",
+            "addq",
+            "addl",
+            "subq",
+            "subl",
+            "sbbq",
+            "sbbl",
+            "andq",
+            "andl",
+            "orq",
+            "orl",
+            "orb",
+            "xorq",
+            "xorl",
+            "shlq",
+            "shll",
+            "shrq",
+            "shrl",
+            "sarq",
+            "sarl",
+        }
+        and len(operands) == 2
+    ):
+        if re.fullmatch(r"%\w+", operands[1]):
+            _forget(values, operands[1])
+        else:
+            values.clear()
+        return False
+    if (
+        inst.op in {"popq", "setb", "sete", "setne", "incq", "decq", "negq", "notq"}
+        and len(operands) == 1
+        and re.fullmatch(r"%\w+", operands[0])
+    ):
+        _forget(values, operands[0])
+        if inst.op == "popq":
+            _forget(values, "%rsp")
+        return False
+    if inst.op == "pushq" and len(operands) == 1:
+        _forget(values, "%rsp")
+        return False
+    arm_counts = {"mov": 2, "adrp": 2, "add": 3, "sub": 3, "subs": 3, "csinv": 4}
+    if (
+        inst.op in arm_counts
+        and len(operands) == arm_counts[inst.op]
+        and re.fullmatch(r"[xw]\d+|sp", operands[0])
+    ):
+        _forget(values, operands[0])
+        return False
+    if inst.op == "ldrb" and re.fullmatch(r"w\d+, \[(?:x\d+|sp)(?:, #?0x[0-9a-f]+)?\]", args):
+        _forget(values, operands[0])
+        return False
+    values.clear()
     return False
 
 
@@ -444,11 +601,11 @@ def clock_calls(body: list[Instruction], offset: int) -> list[int]:
         successors = []
         if (
             BRANCH.fullmatch(inst.op)
-            and inst.op not in {"call", "callq", "bl", "blr"}
+            and inst.op not in CALLS
             and (target := inst.target()) in positions
         ):
             successors.append(positions[target])
-        if inst.op not in {"jmp", "jmpq", "b", "br", "ret", "retq"} and index + 1 < len(body):
+        if inst.op not in TAILS | {"ret", "retq"} and index + 1 < len(body):
             successors.append(index + 1)
         for successor in successors:
             previous = incoming.get(successor)

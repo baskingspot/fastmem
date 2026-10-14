@@ -1,5 +1,6 @@
 """Mutation fixtures prove the delegation audit follows callees, including tail calls."""
 
+import re
 import shutil
 import struct
 import subprocess
@@ -9,7 +10,15 @@ from unittest.mock import patch
 
 import pytest
 
-from fastmem_bench.find_audit import Assembly, Elf, backedges, clock_calls, selector_returns
+from fastmem_bench.find_audit import (
+    ARM_AUTH_CALLS,
+    ARM_AUTH_TAILS,
+    Assembly,
+    Elf,
+    backedges,
+    clock_calls,
+    selector_returns,
+)
 from fastmem_bench.find_codegen import inspect, scan
 
 
@@ -80,6 +89,12 @@ def portable(tmp_path_factory: pytest.TempPathFactory) -> Path:
     if not all(shutil.which(tool) for tool in ("zig", "llvm-objdump")):
         pytest.skip("requires Nix Zig/LLVM tools")
     destination = tmp_path_factory.mktemp("find-audit-portable")
+    source = Path(__file__).resolve().parents[2]
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    # Label the merged-source worktree build, rather than an obsolete fixture.
+    (destination / "source-revision.txt").write_text(revision + "-find-audit-worktree\n")
     subprocess.run(
         [
             "zig",
@@ -89,10 +104,11 @@ def portable(tmp_path_factory: pytest.TempPathFactory) -> Path:
             "-Dtarget=x86_64-linux-gnu",
             "-Dcpu=x86_64",
             "-Doptimize=ReleaseFast",
+            f"-Drev={revision}-find-audit-worktree",
             "--prefix",
             str(destination),
         ],
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=source,
         check=True,
         capture_output=True,
         timeout=1200,
@@ -117,7 +133,24 @@ def test_real_portable_seven_closures_and_clock_identities(portable: Path, tmp_p
     assert not evidence["unresolved"]
     proof = evidence["dispatch_proof"]
     assert len(proof["entries"]) == 7
-    assert len(proof["writers"]) == 4
+    asm = Assembly((tmp_path / "executable.asm").read_text())
+    slot = int(proof["slot"], 16)
+    actual_writers = [
+        hex(owner)
+        for owner, body in asm.bodies.items()
+        for inst in body
+        if inst.op == "movq"
+        and inst.args.startswith("%")
+        and re.search(rf"# {slot:#x}\b", inst.args)
+    ]
+    assert proof["writers"] == actual_writers
+    assert proof["initial_resolver"] in actual_writers
+    assert len(proof["installation_tables"]) == 4
+    assert (
+        (portable.parent.parent / "source-revision.txt")
+        .read_text()
+        .endswith("-find-audit-worktree\n")
+    )
     closure = {f["address"] for f in evidence["followed_functions"]}
     assert all(e["address"] in closure for e in proof["entries"])
     assert sum(f["symbol"] == "find.twoWay" for f in evidence["followed_functions"]) == 7
@@ -159,8 +192,8 @@ def test_real_portable_disassembly_mutations_fail_closed(
         replacement = f" {inst.address:x}: callq {operand}"
     elif mutation == "unproven-table":
         owner = int(original["dispatch_proof"]["initial_resolver"], 16)
-        inst = next(i for i in asm.bodies[owner] if i.args.startswith("(%rax,%rdi), %rax"))
-        replacement = f" {inst.address:x}: movq (%rax,%rsi), %rax"
+        inst = next(i for i in asm.bodies[owner] if i.op == "leal" and ",8)" in i.args)
+        replacement = f" {inst.address:x}: {inst.op} {inst.args.replace(',8)', ',4)')}"
     else:
         owner = int(original["dispatch_proof"]["selector"], 16)
         inst = next(i for i in asm.bodies[owner] if i.op == "movb" and i.args == "$0x6, %al")
@@ -244,3 +277,270 @@ def test_clock_provenance_rejects_subregister_clobber() -> None:
  1005: callq *0x2c0(%rax)
 """
     assert not clock_calls(Assembly(assembly).bodies[0x1000], 0x2C0)
+
+
+def assembled_bytes(tmp_path: Path, source: str, target: str) -> bytes:
+    if not all(shutil.which(tool) for tool in ("zig", "llvm-objdump")):
+        pytest.skip("requires Nix Zig/LLVM tools")
+    asm, obj = tmp_path / "negative.s", tmp_path / "negative.o"
+    asm.write_text(".text\n.global repro\nrepro:\n" + source + "\n")
+    subprocess.run(
+        ["zig", "cc", "-target", target, "-c", str(asm), "-o", str(obj)],
+        check=True,
+        capture_output=True,
+        timeout=120,
+    )
+    elf = Elf(obj)
+    text = next(s for s in elf.sections if s[1] == 1 and s[2] & 4)
+    return elf.raw[text[4] : text[4] + text[5]]
+
+
+def patch_bytes(binary: Path, destination: Path, address: int, code: bytes) -> Path:
+    elf = Elf(binary)
+    section = next(s for s in elf.sections if s[1] == 1 and s[3] <= address < s[3] + s[5])
+    offset = section[4] + address - section[3]
+    raw = bytearray(elf.raw)
+    raw[offset : offset + len(code)] = code
+    destination.write_bytes(raw)
+    return destination
+
+
+@pytest.mark.parametrize("op", sorted(ARM_AUTH_CALLS | ARM_AUTH_TAILS))
+def test_actual_arm_authenticated_edges_fail_closed(tmp_path: Path, op: str) -> None:
+    operand = "x9" if op.endswith("z") else "x9, x10"
+    assembled_bytes(tmp_path, f".arch armv8.3-a\n{op} {operand}\nret", "aarch64-linux-gnu")
+    text = subprocess.run(
+        ["llvm-objdump", "-d", "--no-show-raw-insn", str(tmp_path / "negative.o")],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    asm = Assembly(text)
+    inst = asm.bodies[asm.roots(["repro"])[0]][0]
+    assert inst.op == op
+    assert inst.target() is None
+    assert len(scan(text, ["repro"])["unresolved"]) == 1
+
+
+@pytest.mark.parametrize("mutation", ["index-scale", "xchg-clock"])
+def test_actual_portable_byte_counterexamples_fail_closed(
+    portable: Path,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    original = audited(portable, tmp_path / "original.asm")
+    elf = Elf(portable)
+    asm = Assembly((tmp_path / "original.asm").read_text())
+    if mutation == "index-scale":
+        owner = int(original["dispatch_proof"]["initial_resolver"], 16)
+        inst = next(i for i in asm.bodies[owner] if i.op == "leal" and ",8)" in i.args)
+        address = inst.address
+        source = "leal " + inst.args.replace(",8)", ",4)")
+    else:
+        address = elf.symbol("bench_find.runFastmemDirect")
+        source = (
+            "movq %rsi,%rbx\nxchgq %rbx,%rdx\n"
+            f"movq 8(%rbx),%rax\ncall *{elf.clock_offset()}(%rax)\n"
+            f"movq 8(%rbx),%rax\ncall *{elf.clock_offset()}(%rax)\nret"
+        )
+    code = assembled_bytes(tmp_path, source, "x86_64-linux-gnu")
+    mutant = patch_bytes(portable, tmp_path / "mutant", address, code)
+    result = audited(mutant, tmp_path / "mutant.asm")
+    assert result["status"] == "invalid"
+    assert result["unresolved"]
+    if mutation == "xchg-clock":
+        assert "xchgq" in (tmp_path / "mutant.asm").read_text()
+        assert not any(
+            c["caller_address"] == hex(address) for c in result["clock_calls_for_manual_review"]
+        )
+
+
+@pytest.mark.parametrize(
+    "clobber",
+    [
+        "xchgq %rbx, %rdx",
+        "xaddq %rbx, %rdx",
+        "cmpxchgq %rdx, %rbx",
+        "mulq %rbx",
+        "imulq %rbx",
+        "divq %rbx",
+        "cpuid",
+        "xgetbv",
+        "movb $0x0, %bl",
+        "popq %rbx",
+        "mystery %rdx",
+        "loop 0x1002",
+    ],
+)
+def test_clock_clobber_families_fail_closed(clobber: str) -> None:
+    body = Assembly(f"""00001000 <timed>:
+ 1000: movq %rsi, %rbx
+ 1001: {clobber}
+ 1002: movq 0x8(%rbx), %rax
+ 1003: callq *0x2c0(%rax)
+ 1004: movq 0x8(%rbx), %rax
+ 1005: callq *0x2c0(%rax)
+ 1006: retq
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+@pytest.mark.parametrize(
+    "clobber",
+    [
+        "ldp x19, x20, [x2]",
+        "ldr x9, [x19], #0x8",
+        "str x9, [x19, #0x8]!",
+        "ldrb w9, [x19], #0x1",
+        "bl 0x2000",
+    ],
+)
+def test_arm_multi_destination_writeback_and_call_clobbers(clobber: str) -> None:
+    # For BL use caller-saved x1; for writeback/paired loads use x19.
+    register = "x1" if clobber.startswith("bl ") else "x19"
+    body = Assembly(f"""00001000 <timed>:
+ 1000: mov {register}, x1
+ 1004: {clobber}
+ 1008: ldp x0, x8, [{register}]
+ 100c: ldr x9, [x8, #0x2c0]
+ 1010: blr x9
+ 1014: ldp x0, x8, [{register}]
+ 1018: ldr x9, [x8, #0x2c0]
+ 101c: blr x9
+ 1020: ret
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+def test_unknown_write_drops_spilled_provenance() -> None:
+    body = Assembly("""00001000 <timed>:
+ 1000: movq %rsi, -0x10(%rbp)
+ 1001: mystery
+ 1002: movq -0x10(%rbp), %rbx
+ 1003: movq 0x8(%rbx), %rax
+ 1004: callq *0x2c0(%rax)
+ 1005: movq 0x8(%rbx), %rax
+ 1006: callq *0x2c0(%rax)
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+def test_clock_cfg_loop_join_drops_identity() -> None:
+    body = Assembly("""00001000 <timed>:
+ 1000: movq %rsi, %rbx
+ 1001: movq 0x8(%rbx), %rax
+ 1002: callq *0x2c0(%rax)
+ 1003: je 0x1006
+ 1004: xchgq %rbx, %rdx
+ 1005: jmp 0x1003
+ 1006: movq 0x8(%rbx), %rax
+ 1007: callq *0x2c0(%rax)
+ 1008: retq
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["shift-layout", "extra-nop", "writer-bypass", "writer-clobber"]
+)
+def test_installation_data_flow_not_compiler_template(
+    portable: Path,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    original = audited(portable, tmp_path / "original.asm")
+    assembly = (tmp_path / "original.asm").read_text()
+    asm = Assembly(assembly)
+    selector = int(original["dispatch_proof"]["selector"], 16)
+    # Mutate ALL actual writer blocks to exercise register/length independence.
+    for owner in original["dispatch_proof"]["writers"]:
+        body = asm.bodies[int(owner, 16)]
+        call = next(n for n, i in enumerate(body) if i.op == "callq" and i.target() == selector)
+        lea = body[call + 2]
+        assert lea.op == "leal"
+        if mutation == "shift-layout":
+            assembly = assembly.replace(lea.text, f" {lea.address:x}: shll $0x3, %eax")
+            for inst in body[call + 3 : call + 11]:
+                if inst.op == "movq":
+                    assembly = assembly.replace(inst.text, inst.text.replace("(%rcx,", "(%rax,"))
+        elif mutation == "extra-nop":
+            assembly = assembly.replace(lea.text, lea.text + f"\n {lea.address + 1:x}: nop")
+        elif mutation == "writer-bypass":
+            assembly = assembly.replace(
+                body[0].text, f" {body[0].address:x}: jmp 0x{lea.address:x}"
+            )
+        else:
+            assembly = assembly.replace(
+                lea.text, lea.text + f"\n {lea.address + 1:x}: xchgq %rcx, %rdx"
+            )
+    evidence = audited(portable, tmp_path / "mutant.asm", assembly)
+    assert evidence["status"] == (
+        "pending-review" if mutation in {"shift-layout", "extra-nop"} else "invalid"
+    )
+
+
+@pytest.mark.parametrize("tail", ["br x9", "braa x9, x10", "braaz x9"])
+def test_indirect_tail_does_not_fall_through_to_clocks(tail: str) -> None:
+    body = Assembly(f"""00001000 <timed>:
+ 1000: mov x19, x1
+ 1004: {tail}
+ 1008: ldp x0, x8, [x19]
+ 100c: ldr x9, [x8, #0x2c0]
+ 1010: blr x9
+ 1014: ldp x0, x8, [x19]
+ 1018: ldr x9, [x8, #0x2c0]
+ 101c: blr x9
+""").bodies[0x1000]
+    assert not clock_calls(body, 0x2C0)
+
+
+@pytest.mark.parametrize("mutation", ["memory-store", "slot-escape"])
+def test_installation_memory_and_slot_checks_remain_closed(
+    portable: Path,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    original = audited(portable, tmp_path / "original.asm")
+    assembly = (tmp_path / "original.asm").read_text()
+    asm = Assembly(assembly)
+    body = asm.bodies[int(original["dispatch_proof"]["initial_resolver"], 16)]
+    if mutation == "memory-store":
+        inst = next(i for i in body if "<x86_64.dispatch.copy_fn>" in i.args)
+        args = re.sub(r"^%\w+,", "%rax,", inst.args)
+        replacement = f" {inst.address:x}: movq {args}"
+    else:
+        inst = next(
+            i for i in body if "<x86_64.dispatch.find_fn>" in i.args and i.args.startswith("%")
+        )
+        source = inst.args.split(", ", 1)[1].split("#", 1)[0].strip()
+        comment = inst.args.partition("#")[2]
+        replacement = f" {inst.address:x}: leaq {source}, %rax # {comment}"
+    result = audited(portable, tmp_path / "mutant.asm", assembly.replace(inst.text, replacement))
+    assert result["status"] == "invalid"
+    assert result["unresolved"]
+
+
+@pytest.mark.parametrize("register", ["%rax", "%rcx", "%r11"])
+def test_dispatch_branch_register_allocation_and_bypass(register: str) -> None:
+    from fastmem_bench.find_audit import dispatch_call
+
+    body = Assembly(f"""00001000 <root>:
+ 1000: movq 0x100(%rip), {register} # 0x3000 <find_fn>
+ 1001: movq {register}, %rbx
+ 1002: callq *%rbx
+""").bodies[0x1000]
+    assert dispatch_call(body, 2, 0x3000)
+    assert not dispatch_call(body, 2, 0x3000, {0x1001})
+
+
+def test_dispatch_multiple_loads_do_not_hide_a_bypass() -> None:
+    from fastmem_bench.find_audit import dispatch_call
+
+    body = Assembly("""00001000 <root>:
+ 1000: movq 0x100(%rip), %r11 # 0x3000 <find_fn>
+ 1001: nop
+ 1002: movq 0x100(%rip), %rax # 0x3000 <find_fn>
+ 1003: callq *%r11
+""").bodies[0x1000]
+    assert dispatch_call(body, 3, 0x3000)
+    assert not dispatch_call(body, 3, 0x3000, {0x1001})

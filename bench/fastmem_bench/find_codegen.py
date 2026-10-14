@@ -8,6 +8,7 @@ from typing import Any
 
 from fastmem_bench.find_audit import (
     BRANCH,
+    CALLS,
     Assembly,
     Elf,
     backedges,
@@ -102,7 +103,7 @@ def inspect(  # noqa: C901, PLR0912 — fail-closed proof assembly
     ]
     indirect = [a for a in timed_roots if asm.names[a].startswith("bench_find.runIndirect")]
     if not indirect or not any(
-        i.op in {"blr", "call", "callq"} and i.target() is None
+        i.op in CALLS and i.target() is None
         for a in indirect
         for i in asm.bodies[a]
         if any(lo <= i.address <= hi for lo, hi in backedges(asm.bodies[a]))
@@ -121,9 +122,15 @@ def inspect(  # noqa: C901, PLR0912 — fail-closed proof assembly
             targets = [int(e["address"], 16) for e in dispatch["entries"]]
             targets.append(int(dispatch["initial_resolver"], 16))
             slot = int(dispatch["slot"], 16)
+            incoming_targets = {
+                target
+                for body in asm.bodies.values()
+                for i in body
+                if BRANCH.fullmatch(i.op) and (target := i.target()) is not None
+            }
             for owner, body in asm.bodies.items():
                 for index, instruction in enumerate(body):
-                    if dispatch_call(body, index, slot):
+                    if dispatch_call(body, index, slot, incoming_targets):
                         finite[instruction.address] = targets
                         dispatch_sites.append(
                             {
