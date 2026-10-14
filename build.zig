@@ -294,6 +294,32 @@ pub fn build(b: *std.Build) void {
     bench_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| bench_cmd.addArgs(args);
 
+    // Separate search dialect; no changes to the memory-operation binary/schema.
+    const find_exe = b.addExecutable(.{
+        .name = "bench-find",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/bench_find.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "fastmem", .module = mod },
+                .{ .name = "bench_options", .module = bench_opts.createModule() },
+                .{ .name = "c", .module = bench_c.createModule() },
+            },
+        }),
+    });
+    find_exe.root_module.linkSystemLibrary("dl", .{});
+    const install_find = b.addInstallArtifact(find_exe, .{});
+    b.step("bench-find-bin", "Install the substring search measurement binary")
+        .dependOn(&install_find.step);
+    const find_cmd = b.addRunArtifact(find_exe);
+    if (b.args) |args| find_cmd.addArgs(args);
+    b.step("bench-find", "Run one-shot substring search measurements").dependOn(&find_cmd.step);
+    const find_tests = b.addTest(.{ .root_module = find_exe.root_module });
+    const run_find_tests = b.addRunArtifact(find_tests);
+    b.step("test-find-bench", "Test search measurement guards").dependOn(&run_find_tests.step);
+
     const libc_probe_mod = b.createModule(.{
         .root_source_file = b.path("src/libc_probe.zig"),
         .target = target,
@@ -423,6 +449,8 @@ pub fn build(b: *std.Build) void {
     // Compile the shipped binaries too: a module-graph error (for example
     // one file imported by two modules) only shows up when they build.
     test_step.dependOn(&bench_exe.step);
+    test_step.dependOn(&find_exe.step);
+    test_step.dependOn(&run_find_tests.step);
     test_step.dependOn(&correctness.step);
     test_step.dependOn(&find_guard.step);
     test_step.dependOn(&find_unit_cmd.step);
