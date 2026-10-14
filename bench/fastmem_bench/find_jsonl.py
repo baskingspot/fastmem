@@ -60,10 +60,11 @@ class Resolution(Strict):
 
 
 class Dispatch(Strict):
+    """Shared selected large-search level; tiny/local paths need not use its entry."""
+
     level: Literal[
         "generic", "x86_64_v3", "x86_64_v4", "sapphirerapids", "graniterapids", "znver4", "znver5"
     ]
-    kernel: str = Field(min_length=1)
 
 
 class Meta(Strict):

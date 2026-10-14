@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from fastmem_bench.find_build import validate_codegen
 from fastmem_bench.find_codegen import inspect
 from fastmem_bench.find_jsonl import inventory, parse
 
@@ -73,9 +74,24 @@ def test_invalid_cli_no_success_artifact(args: tuple[str, ...]) -> None:
 
 def test_integrated_executable_search_audit(tmp_path: Path) -> None:
     evidence = inspect(BINARY, tmp_path / "executable.asm", kernel_pending=False)
+    validate_codegen(evidence)
     assert evidence["status"] in {"clean", "pending-review"}
     assert evidence["kernel_pending"] is False
     assert evidence["anti_hoist_status"] == "manual-review-required"
     assert evidence["followed_callees"]
     assert "runIndirect" in " ".join(evidence["timed_roots"])
     assert "memmem" not in evidence["followed_callees"]
+
+
+def test_complete_standard_parses_with_independent_probe(tmp_path: Path) -> None:
+    probe_result = invoke("--probe")
+    assert probe_result.returncode == 0, probe_result.stderr
+    result = invoke("--suite", "standard", "--samples", "1", "--sample-ms", "1", "--warmup-ms", "0")
+    assert result.returncode == 0, result.stderr
+    path = tmp_path / "standard.jsonl"
+    path.write_text(result.stdout)
+    measurement = parse(path, probe=json.loads(probe_result.stdout))
+    assert len(measurement.cases) == 219
+    assert len(measurement.samples) == 1068
+    dispatch = measurement.meta["dispatch"]
+    assert dispatch is None or set(dispatch) == {"level"}

@@ -1,6 +1,8 @@
 """The `just b find` experiment and offline reanalysis, isolated from schema-v3 goals."""
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +17,7 @@ from ec2bench.runs import create_run, validate_label, write_manifest
 from fastmem_bench.analysis import validate_effect
 from fastmem_bench.build import CPU_MODES, build_cpu, expected_dispatch, resolve
 from fastmem_bench.find_analysis import analyze
-from fastmem_bench.find_build import build
+from fastmem_bench.find_build import build, build_command, read_evidence, validate_codegen
 from fastmem_bench.find_jsonl import validate_resolution
 from fastmem_bench.find_protocol import execute
 from fastmem_bench.protocol import orders
@@ -146,6 +148,7 @@ def find(
                     "binary": str(b.binary),
                     "codegen": b.codegen,
                     "source_hash": b.source.source_hash,
+                    "source_path": str(b.source.path),
                 }
                 for v, b in variants.items()
             },
@@ -191,8 +194,11 @@ def find(
 
 
 def analyze_target(destination: Path) -> dict[str, Any]:
-    experiment = json.loads((destination / "experiment.json").read_text())
-    manifest = json.loads((destination.parent / "manifest.json").read_text())
+    experiment = read_evidence(destination / "experiment.json")
+    manifest = read_evidence(destination.parent / "manifest.json")
+    protocol = read_evidence(destination / "protocol.json")
+    validate_protocol(destination, manifest, experiment, protocol)
+    validate_builds(destination, manifest, experiment)
     result = analyze(
         destination / "raw",
         experiment["expected"],
@@ -200,17 +206,6 @@ def analyze_target(destination: Path) -> dict[str, Any]:
         probe=json.loads((destination / "memmem-probe.json").read_text()),
         minimum_effect=manifest["minimum_effect"],
     )
-    # Tie saved provenance to the retained exact executable bytes, not just metadata strings.
-    import hashlib
-
-    for variant, item in experiment["builds"].items():
-        binary = destination / "build" / ("v0" if variant == "aa" else variant) / "bin/bench-find"
-        if hashlib.sha256(binary.read_bytes()).hexdigest() != item["codegen"]["binary_sha256"]:
-            raise ValueError("Saved search binary no longer matches build evidence")
-        if item["codegen"]["binary_sha256"] != experiment["expected"][variant]["binary_sha256"]:
-            raise ValueError("Manifest build evidence disagrees with raw expected hash")
-    protocol = json.loads((destination / "protocol.json").read_text())
-    validate_protocol(destination, manifest, experiment, protocol)
     result["protocol"] = protocol
     result["builds"] = experiment["builds"]
     result["codegen_status"] = {
@@ -221,6 +216,53 @@ def analyze_target(destination: Path) -> dict[str, Any]:
         "No search goal verdict; pending-kernel or manual codegen review is not acceptance"
     )
     return result
+
+
+def validate_builds(
+    destination: Path, manifest: dict[str, Any], experiment: dict[str, Any]
+) -> None:
+    """Cross-check retained identities before analyzing any successful measurement rows."""
+    sources = {source["variant"]: source for source in manifest["sources"]}
+    if (
+        len(sources) != len(manifest["sources"])
+        or "v0" not in sources
+        or any(not re.fullmatch(r"v[0-9]+", variant) for variant in sources)
+    ):
+        raise ValueError("Invalid search source variants")
+    settings = manifest["config"]["targets"][destination.name]
+    cpu = build_cpu(settings, manifest["cpu_mode"])
+    builds, expected = experiment["builds"], experiment["expected"]
+    if builds["aa"] != builds["v0"] or expected["aa"] != expected["v0"]:
+        raise ValueError("Search A/A must reuse the exact baseline build and metadata")
+    for variant, item in builds.items():
+        source = sources["v0" if variant == "aa" else variant]
+        if (
+            not isinstance(source["hash"], str)
+            or not re.fullmatch(r"(?:[a-f0-9]{40}|[a-f0-9]{64})", source["hash"])
+            or item["source_hash"] != source["hash"]
+            or not isinstance(source["path"], str)
+            or not Path(source["path"]).is_absolute()
+            or item["source_path"] != source["path"]
+        ):
+            raise ValueError("Saved search source identity disagrees with manifest")
+        prefix = (destination / "build" / source["variant"]).resolve()
+        command = build_command(
+            target=settings["zig_target"], cpu=cpu, revision=source["revision"], prefix=prefix
+        )
+        if item["command"] != command or read_evidence(prefix / "command.json") != command:
+            raise ValueError("Saved search build command disagrees with configured build")
+        binary = prefix / "bin/bench-find"
+        if item["binary"] != str(binary) or not binary.is_file():
+            raise ValueError("Saved search binary path disagrees with retained build")
+        codegen = item["codegen"]
+        validate_codegen(codegen)
+        if read_evidence(prefix / "codegen.json") != codegen:
+            raise ValueError("Saved search codegen sidecar contradicts experiment")
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        if digest != codegen["binary_sha256"] or digest != expected[variant]["binary_sha256"]:
+            raise ValueError("Saved search binary digest disagrees with build/expected evidence")
+        if expected[variant]["dispatch_level"] is not None and not codegen["dispatch_proof"]:
+            raise ValueError("Missing search dispatch codegen proof")
 
 
 def validate_protocol(

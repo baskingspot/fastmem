@@ -115,7 +115,7 @@ def test_wrong_dispatch_in_any_offline_round_fails(tmp_path: Path) -> None:
             values[0].update(
                 cpu="x86_64",
                 target="x86_64-linux-gnu",
-                dispatch={"level": "znver4", "kernel": "tiered"},
+                dispatch={"level": "znver4"},
             )
             if variant == "aa" and index == 4:
                 values[0]["dispatch"]["level"] = "generic"

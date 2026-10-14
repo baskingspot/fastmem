@@ -262,8 +262,16 @@ def test_dispatch_required_and_expected_level_enforced(tmp_path: Path) -> None:
     values[0].update(target="x86_64-linux-gnu", cpu="x86_64")
     with pytest.raises(ValueError, match="dispatch evidence"):
         parse(save(tmp_path / "bad.jsonl", values))
-    values[0]["dispatch"] = {"level": "generic", "kernel": "zig-simd"}
+    values[0]["dispatch"] = {"level": "generic"}
     with pytest.raises(ValueError, match="Wrong dispatch_level"):
         parse(save(tmp_path / "bad.jsonl", values), expected={"dispatch_level": "znver4"})
     values[0]["dispatch"]["level"] = "znver4"
     parse(save(tmp_path / "good.jsonl", values), expected={"dispatch_level": "znver4"})
+
+
+def test_non_find_kernel_decoration_rejected(tmp_path: Path) -> None:
+    values = records()
+    values[0].update(target="x86_64-linux-gnu", cpu="x86_64")
+    values[0]["dispatch"] = {"level": "znver4", "kernel": "not-a-find-kernel"}
+    with pytest.raises(ValueError, match="kernel"):
+        parse(save(tmp_path / "bad.jsonl", values))

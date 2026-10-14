@@ -506,10 +506,12 @@ fn jsonLine(w: *Io.Writer, value: anytype) !void {
     try std.json.Stringify.value(value, .{}, w);
     try w.writeByte('\n');
 }
-const Dispatch = struct { level: []const u8, kernel: []const u8 };
+const Dispatch = struct { level: []const u8 };
+// This is the shared selected large-search dispatch level, not a per-call kernel.
+// Tiny/local searches do not use the selected large-search entry.
 fn dispatchSummary() ?Dispatch {
     const level = fastmem.dispatch.level() orelse return null;
-    return .{ .level = @tagName(level), .kernel = fastmem.dispatch.kernelName().? };
+    return .{ .level = @tagName(level) };
 }
 fn run(init: std.process.Init) !void {
     const a = init.arena.allocator();
