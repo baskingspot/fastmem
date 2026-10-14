@@ -169,26 +169,36 @@ At the `generic` level, `memcpy` uses the forward-only generic copy.
 ### Private find path
 
 Search reuses the monotonic atomic `selected` byte, not a mutable function pointer.
-Tiny and local find paths still bypass dispatch.
+Tiny and local find paths bypass dispatch.
 The private `findPointer()` returns one constant C-ABI dispatcher address.
-That noinline dispatcher loads the byte with a volatile atomic load, masks it
-with 7, and tail-jumps through an immutable eight-word table.
-Entries 0 through 6 are the existing level kernels; entry 7 is `resolveFind`.
-The initial byte is 255, so its masked index resolves on first use.
-The resolver keeps CPUID/OS validation and the three memory-pointer stores,
-then updates the shared selected byte and retries through the dispatcher.
-Supported `force` operations change that same byte.
-Concurrent first calls select the same level with monotonic cache semantics.
 
-The executable search audit proves the actual byte load, surviving mask,
-full-width bounded index, scale, table address, and all eight target words.
-The entire 64-byte table must be read-only in a LOAD or protected by page-complete
-GNU_RELRO (LLVM places constant function pointers in `.data.rel.ro`).
-All eight closures are traversed; incoming branches into the guard interior,
-unknown effects, altered entries, and mutable tables fail closed.
-A corrupt selected byte cannot introduce an arbitrary function target, though
-executing a corrupted index could select an ISA the host does not support.
-The all-256-byte unit control compares pointers without executing those levels.
+The noinline dispatcher uses a volatile atomic load.
+It masks the byte with 7 and tail-jumps through an immutable eight-word table.
+Entries 0 through 6 contain the existing level kernels.
+Entry 7 contains `resolveFind`.
+The initial value, 255, selects that resolver.
+
+The resolver validates CPUID and OS state.
+It updates the three memory pointers and the selected byte.
+It then tail-calls the dispatcher.
+Supported `force` operations update the same byte.
+Concurrent first calls select the same detected level through monotonic atomic operations.
+
+The executable search audit proves the mask and the full-width index from the actual instructions.
+It binds the byte load to `selected`.
+It also proves the table address and the index scale.
+It matches all eight target words to identified functions.
+
+The entire 64-byte table must occupy read-only LOAD pages or page-complete GNU_RELRO storage.
+LLVM places constant function pointers in `.data.rel.ro`.
+
+The audit traverses all eight target closures.
+It rejects unknown effects and altered entries.
+It rejects mutable tables and all branches that enter the guard interior.
+
+A corrupt selected byte cannot introduce a ninth target.
+A corrupt index can select an ISA that the host does not support.
+The all-byte unit test compares pointers and does not call those kernels.
 
 ### Recursion
 
