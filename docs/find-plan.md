@@ -113,6 +113,7 @@ The kernel owner also adds the private module import for each existing x86 dispa
 Independent review runs alongside fleet correctness tests.
 Parent acceptance requires both review and measured evidence.
 
-The mission budget is 4,000,000 tokens.
+The original mission used a 4,000,000-token estimate.
+Matt approved additional tokens for further optimization on 2026-10-14.
 Complex work uses `openai-codex/gpt-6.1-sol`.
 Routine extraction and mechanical work use `fireworks/accounts/fireworks/models/deepseek-v4p1-flash`.
