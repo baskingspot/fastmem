@@ -61,7 +61,7 @@ Intel families have two threads for each core. AMD and Graviton families
 have one thread for each core. The harness reads the topology from sysfs.
 It does not assume it.
 
-A target can also run a "baseline" build (`x86_64_v3` or `generic`).
+A target can also run a "baseline" build (`x86_64` or `generic`).
 The target table is data in `bench.toml`, not code.
 
 ## Repository layout
@@ -216,13 +216,13 @@ instance_type = "c7i.xlarge"
 arch = "x86_64"
 zig_target = "x86_64-linux-gnu"
 zig_cpu = "sapphirerapids"   # -Dcpu of the G1-G4 builds
-baseline_cpu = "x86_64_v3"   # -Dcpu of the G6 builds (bench run --cpu baseline)
+baseline_cpu = "x86_64"      # -Dcpu of the G6 builds (bench run --cpu baseline)
 # ... one table for each target in the Targets section
 ```
 
-`baseline_cpu` is `x86_64_v3` on the x86 targets and `generic` on the
-aarch64 targets (plan, G6). Without the key, the adapter uses the same
-values from the architecture.
+`baseline_cpu` is `x86_64` on the x86 targets and `generic` on the
+aarch64 targets (plan, G6). The x86 build selects its kernel at runtime.
+Without the key, the adapter uses these architecture defaults.
 
 `ec2bench` reads `[project]`, `[fleet]`, and the `instance_type` and
 `arch` fields of `[targets.*]`. The adapter reads the other fields.
@@ -1061,6 +1061,71 @@ The harness saves on-box disassembly for all three glibc functions beside the ta
 These artifacts remain under gitignored result directories.
 They never enter this MIT repository.
 The clean-room rule is in `docs/fastmem-plan.md`.
+
+## Search measurements (`fastmem-find/1`)
+
+`bench-find` measures one-shot `u8` search in nanoseconds per call.
+The `find` and `find-analyze` commands use separate search protocols and
+analysis modules. They do not change the memory-operation schemas or goals.
+The `find-test` command uses a separate correctness matrix.
+
+The primary ratio is `fastmem_direct/std_direct` for runtime needles.
+A ratio below one favors fastmem. Fixed-needle comparisons remain separate.
+The indirect comparison uses one shared loop and pointer-return C ABI for
+stdlib, fastmem, and the verified glibc destination. Each runtime call includes
+needle setup. Fixed calls retain compiler optimizations for literal needles.
+
+| Suite | Runtime cases | Fixed cases | Total cases | Cells per sample |
+|---|---:|---:|---:|---:|
+| quick | 38 | 9 | 47 | 208 |
+| standard | 210 | 9 | 219 | 1068 |
+
+Each case contributes equally to its comparison's geometric mean.
+These are stress weights, not user-frequency estimates. End matches,
+absence, and boundaries receive deliberate emphasis. Ten controlled cases
+vary haystack and needle alignment independently, with identical input bytes.
+Each actual input must satisfy its advertised first-match position.
+Empty needles return zero. Oversized needles return null, regardless of their
+position labels.
+
+Accepted runs require at least five rounds and the exact baseline binary
+for A/A replay. Results report actual confidence coverage. Five paired rounds
+provide 93.75% coverage, not 95%. Outliers remain in all estimates and intervals.
+
+Each A/A floor group fixes these attributes:
+
+- Haystack length.
+- Needle length.
+- Runtime or fixed needle.
+
+A group pools all implementations and input patterns. Positions and alignments
+also pool within that group. The floor uses the 95th percentile of absolute
+log ratios from A/A. Significance uses the larger of the measured floor and
+the configured `minimum_effect`.
+
+Offline analysis requires consistent retained evidence:
+
+- Manifest revisions and source hashes.
+- Exact build commands, command sidecars, and source identities.
+- Executable bytes, digests, and codegen sidecars.
+- Target configuration and selected dispatch levels.
+- Instance identity, topology, isolated CPU, and isolation protocol.
+- The glibc probe, seeded round order, and exact measurement commands.
+- Exact baseline A/A reuse.
+
+The dispatch level names the shared CPU selection, not a per-case search path.
+Tiny and degenerate searches can remain local. The search metadata does not
+present a memory-kernel family name as a find entry identity.
+
+The executable audit must reject unknown indirect edges and forbidden calls.
+It retains distinct function addresses even when symbols share a name.
+Anti-hoist and result-retention review applies to the exact executable bytes.
+Invalid or contradictory evidence fails analysis. Pending evidence and protocol
+completion do not constitute performance acceptance.
+
+Search acceptance follows `docs/find-plan.md`. A performance claim names its
+retained run and a file in `docs/results/`. Aggregate means do not replace
+adversarial checks or dispositions for significant regressions above 10%.
 
 ## Correctness tests (G1)
 
