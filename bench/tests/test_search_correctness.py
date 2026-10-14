@@ -222,3 +222,127 @@ def test_empty_fleet_does_not_launch(config: Config, monkeypatch: pytest.MonkeyP
     assert "No running" in result.output
     fleet.launch.assert_not_called()
     fleet.terminate.assert_not_called()
+
+
+def setup_fleet(config: Config, monkeypatch: pytest.MonkeyPatch) -> tuple[Mock, Mock]:
+    config.targets["intel"].update(zig_target="x86_64-linux-gnu", zig_cpu="sapphirerapids")
+    config.targets["arm"].update(zig_target="aarch64-linux-gnu", zig_cpu="neoverse_v3")
+    fleet = Mock()
+    fleet.one.side_effect = lambda name: {"InstanceId": f"i-{name}"}
+    fleet.instances.return_value = [
+        {
+            "InstanceId": "i-arm",
+            "State": {"Name": "running"},
+            "Tags": [{"Key": "Target", "Value": "arm"}],
+        }
+    ]
+    monkeypatch.setattr(c, "Fleet", Mock(return_value=fleet))
+    monkeypatch.setattr(c, "source_hash", Mock(return_value="fixture-source"))
+    monkeypatch.setattr(c, "box_for", Mock(return_value=Mock()))
+    monkeypatch.setattr("ec2bench.runs.git", Mock(return_value="fixture"))
+    monkeypatch.setattr(c.subprocess, "run", Mock(return_value=Mock(stdout="0.16.0\n")))
+    builder = Mock(return_value={"sha256": "fixture-hash"})
+    monkeypatch.setattr(c, "build_binary", builder)
+    monkeypatch.setattr(
+        c,
+        "execute_binary",
+        lambda *args, **kwargs: record(
+            cpu=args[-1],
+            optimize=kwargs["optimize"],
+            mode=kwargs["mode"],
+            seed=kwargs["seed"],
+            dispatch={"level": "sapphirerapids", "kernel": "fixture"}
+            if args[-1] == "x86_64"
+            else None,
+        ),
+    )
+    return fleet, builder
+
+
+@pytest.mark.parametrize(
+    ("args", "targets", "optimizes"),
+    [
+        ([], ["arm"], ["ReleaseFast"]),
+        (
+            ["--target", "intel", "--target", "arm", "--all-modes"],
+            ["intel", "arm"],
+            list(c.OPTIMIZES),
+        ),
+        (
+            ["--target", "intel", "--optimize", "ReleaseSafe", "--optimize", "ReleaseSafe"],
+            ["intel"],
+            ["ReleaseSafe"],
+        ),
+    ],
+)
+def test_fleet_selection_and_modes(
+    config: Config,
+    monkeypatch: pytest.MonkeyPatch,
+    args: list[str],
+    targets: list[str],
+    optimizes: list[str],
+) -> None:
+    fleet, builder = setup_fleet(config, monkeypatch)
+    result = CliRunner().invoke(c.test_fleet, args, obj=config)
+    assert result.exit_code == 0, result.output
+    assert builder.call_count == len(targets) * len(optimizes) * 2
+    path = next(config.results_dir.glob("*-find-test"))
+    manifest = json.loads((path / "manifest.json").read_text())
+    summary = json.loads((path / "summary.json").read_text())
+    assert set(summary) == set(targets)
+    assert manifest["source_hash"] == "fixture-source"
+    assert manifest["zig_version"] == "0.16.0"
+    assert set(manifest["status"].values()) == {"complete"}
+    for item in summary.values():
+        assert set(item["variants"]) == {
+            c.variant_key(variant, optimize)
+            for optimize in optimizes
+            for variant in ("target", "baseline")
+        }
+    fleet.launch.assert_not_called()
+    fleet.terminate.assert_not_called()
+
+
+def test_fleet_rejects_wrong_baseline_dispatch(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup_fleet(config, monkeypatch)
+    monkeypatch.setattr(
+        c,
+        "execute_binary",
+        lambda *args, **_kwargs: record(
+            cpu=args[-1],
+            dispatch={"level": "generic", "kernel": "wrong"},
+        ),
+    )
+    result = CliRunner().invoke(c.test_fleet, ["--target", "intel"], obj=config)
+    assert result.exit_code == 1, result.output
+    path = next(config.results_dir.glob("*-find-test"))
+    summary = json.loads((path / "summary.json").read_text())
+    assert summary["intel"]["variants"]["target"]["status"] == "pass"
+    assert "expected sapphirerapids" in summary["intel"]["variants"]["baseline"]["error"]
+    assert json.loads((path / "manifest.json").read_text())["status"] == {"intel": "failed"}
+
+
+def test_remote_hash_mismatch_rejects_success(tmp_path: Path) -> None:
+    binary = tmp_path / "binary"
+    binary.write_bytes(b"local")
+    box = Mock()
+
+    def download(remote: str, destination: Path) -> None:
+        (destination / "binary-sha256.txt").write_text(hashlib.sha256(b"remote").hexdigest())
+        (destination / "summary.json").write_text(json.dumps(record()))
+        (destination / "exit-status.txt").write_text("0")
+
+    box.download.side_effect = download
+    with pytest.raises(ValueError, match="binary hash mismatch"):
+        c.execute_binary(
+            box,
+            binary,
+            "/root/test",
+            tmp_path,
+            "sapphirerapids",
+            optimize="ReleaseFast",
+            mode="quick",
+            seed=c.SEED,
+        )
