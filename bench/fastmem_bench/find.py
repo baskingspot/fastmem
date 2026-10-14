@@ -203,7 +203,7 @@ def analyze_target(destination: Path) -> dict[str, Any]:
         destination / "raw",
         experiment["expected"],
         rounds=experiment["rounds"],
-        probe=json.loads((destination / "memmem-probe.json").read_text()),
+        probe=read_evidence(destination / "memmem-probe.json"),
         minimum_effect=manifest["minimum_effect"],
     )
     result["protocol"] = protocol
@@ -301,7 +301,7 @@ def validate_protocol(
             raise ValueError("Expected search dispatch/build disagrees with configured target")
         if any(meta[k] != manifest[k] for k in ("suite", "seed", "samples", "sample_ms", "filter")):
             raise ValueError("Expected search configuration disagrees with manifest")
-    facts = json.loads((destination / "facts.json").read_text())
+    facts = read_evidence(destination / "facts.json")
     if (
         protocol.get("instance_id") != manifest["instances"][name]
         or facts.get("instance_id") != protocol["instance_id"]
@@ -309,7 +309,7 @@ def validate_protocol(
         raise ValueError("Saved search instance identity mismatch")
     if type(protocol.get("cpu")) is not int or protocol["cpu"] != select_cpu(facts["topology"])[0]:
         raise ValueError("Invalid saved isolated CPU")
-    probe = json.loads((destination / "memmem-probe.json").read_text())
+    probe = read_evidence(destination / "memmem-probe.json")
     if protocol.get("probe") != probe:
         raise ValueError("Saved search protocol probe mismatch")
     validate_resolution(probe)
@@ -339,7 +339,7 @@ def validate_protocol(
     if (
         protocol.get("remote") != remote
         or protocol.get("commands") != commands
-        or json.loads((destination / "commands.json").read_text()) != commands
+        or read_evidence(destination / "commands.json") != commands
     ):
         raise ValueError("Saved search commands disagree with manifest/round schedule")
 
@@ -348,7 +348,19 @@ def validate_protocol(
 @click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
 def find_analyze(run_dir: Path) -> None:
     """Strictly reanalyze a saved find experiment without AWS, SSH, or builds."""
-    manifest = json.loads((run_dir / "manifest.json").read_text())
+    try:
+        manifest = read_evidence(run_dir / "manifest.json")
+    except (ValueError, OSError) as error:
+        failure = {
+            "run_id": run_dir.name,
+            "dialect": "fastmem-find",
+            "schema": 1,
+            "status": "failed",
+            "targets": {},
+            "error": str(error),
+        }
+        (run_dir / "summary.json").write_text(json.dumps(failure, indent=2) + "\n")
+        raise click.ClickException("Invalid search manifest: " + str(error)) from error
     if manifest.get("dialect") != "fastmem-find" or manifest.get("schema") != 1:
         raise click.ClickException("Not a fastmem-find/1 run directory")
     targets = {}

@@ -11,7 +11,7 @@ from ec2bench.facts import collect
 from ec2bench.isolation import isolate, run_isolated, stop_isolated
 from ec2bench.parallel import progress
 from fastmem_bench.find_build import Build
-from fastmem_bench.find_jsonl import parse, validate_resolution
+from fastmem_bench.find_jsonl import parse, unique_object, validate_resolution
 
 
 def execute(
@@ -33,7 +33,10 @@ def execute(
         box.upload(build.binary, f"{remote}/bin/{variant}")
     baseline = builds["v0"]
     # Separate process, same dlopen + independent link-map/dladdr proof; ASLR addresses differ.
-    probe = json.loads(box.run(shlex.join([f"{remote}/bin/v0/bench-find", "--probe"])))
+    probe = json.loads(
+        box.run(shlex.join([f"{remote}/bin/v0/bench-find", "--probe"])),
+        object_pairs_hook=unique_object,
+    )
     validate_resolution(probe)
     (destination / "memmem-probe.json").write_text(json.dumps(probe, indent=2) + "\n")
     facts = collect(box, config.results_dir)

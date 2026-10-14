@@ -7,6 +7,7 @@ src/export/audit.py. These helpers intentionally do not inspect shared libraries
 import re
 import struct
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 HEADER = re.compile(r"^([0-9a-f]+) <(.+)>:$")
@@ -262,8 +263,63 @@ def selector_returns(body: list[Instruction]) -> set[int]:  # noqa: C901, PLR091
 
 
 def _reference(inst: Instruction) -> int | None:
-    match = re.search(r"# (0x[0-9a-f]+) <", inst.args)
+    match = re.search(r"# (0x[0-9a-f]+)\b", inst.args)
     return int(match[1], 16) if match else None
+
+
+def _static_width(inst: Instruction) -> int:
+    """Bound fixed-width memory effects and reject unknown extents."""
+    if inst.op in {"cmpxchg8b", "cmpxchg16b"}:
+        return 8 if inst.op == "cmpxchg8b" else 16
+    if inst.op in {"movzbl", "movsbl", "movsbq"} or re.fullmatch(r"set[a-z]+", inst.op):
+        return 1
+    if inst.op in {"movzwl", "movswl", "movswq"}:
+        return 2
+    if inst.op in {"call", "callq", "jmp", "jmpq"}:
+        return 8
+    if re.fullmatch(
+        r"(?:mov|add|sub|adc|sbb|and|or|xor|cmp|test|xchg|cmpxchg|xadd|inc|dec|neg|not|"
+        r"shl|shr|sar|rol|ror|rcl|rcr|mul|imul|div|idiv|push|pop)[bwlq]",
+        inst.op,
+    ):
+        return {"b": 1, "w": 2, "l": 4, "q": 8}[inst.op[-1]]
+    registers = re.findall(r"%(xmm|ymm|zmm|mm)\d+", inst.args)
+    if registers:
+        return max({"mm": 8, "xmm": 16, "ymm": 32, "zmm": 64}[r] for r in registers)
+    raise ValueError("Unproven static memory access width: " + inst.op)
+
+
+def _static_ranges(inst: Instruction, next_address: int | None) -> list[tuple[int, int]]:
+    """Decode static x86 references without a symbol-name requirement."""
+    operands = _operands(inst.args.split("#", 1)[0].strip())
+    ranges = []
+    for original in operands:
+        operand = re.sub(r"^%(?:cs|ds|es|ss):", "", original)
+        address = None
+        if "%rip" in operand:
+            address = _reference(inst)
+            if address is None:
+                displacement = re.fullmatch(r"\*?(-?0x[0-9a-f]+)?\(%rip\)", operand)
+                if (
+                    displacement is None
+                    or next_address is None
+                    or not 0 < next_address - inst.address <= 15
+                ):
+                    raise ValueError("Unproven RIP-relative address")
+                address = (next_address + int(displacement[1] or "0", 16)) % (1 << 64)
+        elif re.fullmatch(r"\*?\$?0x[0-9a-f]+", operand):
+            address = int(operand.lstrip("*$"), 16)
+        if address is not None:
+            # Address materialization is an escape, not a memory read.
+            size = (
+                1 if operand.startswith("$") or inst.op.startswith("lea") else _static_width(inst)
+            )
+            ranges.append((address, address + size))
+    return ranges
+
+
+def _touches_slot(inst: Instruction, slot: int, next_address: int | None) -> bool:
+    return any(lo < slot + 8 and slot < hi for lo, hi in _static_ranges(inst, next_address))
 
 
 def _installation(  # noqa: C901, PLR0912, PLR0915 — explicit instruction semantics
@@ -346,11 +402,15 @@ def dispatch_proof(elf: Elf, asm: Assembly) -> dict:
         for i in body
         if BRANCH.fullmatch(i.op) and (target := i.target()) is not None
     }
+    addresses = sorted(asm.owners)
+    next_addresses = dict(pairwise(addresses))
     installations = []
     writers = []
     for owner, body in asm.bodies.items():
         for index, inst in enumerate(body):
-            if _reference(inst) != slot or slot_register(inst, slot):
+            if not _touches_slot(inst, slot, next_addresses.get(inst.address)) or slot_register(
+                inst, slot
+            ):
                 continue
             if inst.op != "movq" or not re.fullmatch(
                 r"%\w+, [-\w]+\(%rip\)", inst.args.split("#", 1)[0].strip()
@@ -429,10 +489,17 @@ def _operands(args: str) -> list[str]:
 def _forget(values: dict[str, str | None], dest: str) -> None:
     dest = _register(dest)
     values.pop(dest, None)
-    if dest in {"%rbp", "%rsp"}:
-        for key in list(values):
-            if "(" in key:
-                values.pop(key)
+    spill = re.fullmatch(r"(-?0x[0-9a-f]+)\(%rbp\)", dest)
+    for key in list(values):
+        if "(" not in key:
+            continue
+        previous = re.fullmatch(r"(-?0x[0-9a-f]+)\(%rbp\)", key)
+        if dest in {"%rbp", "%rsp"} or (
+            spill is not None
+            and previous is not None
+            and abs(int(spill[1], 16) - int(previous[1], 16)) < 8
+        ):
+            values.pop(key)
 
 
 def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -> bool:  # noqa: C901, PLR0911, PLR0912, PLR0915
@@ -476,6 +543,11 @@ def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -
         return False
     if inst.op == "movq" and len(operands) == 2:
         source, dest = operands
+        if "(" in dest and any(
+            values.get(register) in {"io", "vtable"} for register in re.findall(r"%\w+", dest)
+        ):
+            values.clear()
+            return False
         value = values.get(source)
         if load := re.fullmatch(r"0x8\((%\w+)\)", source):
             value = "vtable" if values.get(load[1]) == "io" else None
@@ -517,9 +589,11 @@ def _clock_step(inst: Instruction, values: dict[str, str | None], offset: int) -
         return False
     # ARM stores without writeback do not write any GPR. Writeback forms,
     # exclusive stores and unrecognized loads fall through to total invalidation.
-    if inst.op in {"str", "stp"} and re.fullmatch(
-        r"(?:[xw]\d+, ){1,2}\[(?:x\d+|sp)(?:, #?-?0x[0-9a-f]+)?\]", args
+    if inst.op in {"str", "stp"} and (
+        store := re.fullmatch(r"(?:[xw]\d+, ){1,2}\[(x\d+|sp)(?:, #?-?0x[0-9a-f]+)?\]", args)
     ):
+        if values.get(store[1]) in {"io", "vtable"}:
+            values.clear()
         return False
     # Exact opcode sets, not prefix/last-operand guesses: these forms have
     # one explicit destination and no implicit GPR writes.

@@ -125,6 +125,36 @@ def test_failure_restores_and_downloads(config: Config, bad: bool) -> None:
     assert json.loads((destination / "protocol.json").read_text())["cpu"] == 3
 
 
+def test_probe_duplicate_fails_before_isolation(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination, build = setup(config)
+    box: Any = FakeBox()
+    original_run = box.run
+
+    def run(command: str, **kwargs: Any) -> str:
+        if command.endswith("--probe"):
+            return '{"libc_path":"/TAMPERED",' + json.dumps(PROBE)[1:]
+        return original_run(command, **kwargs)
+
+    monkeypatch.setattr(box, "run", run)
+    with pytest.raises(ValueError, match="Duplicate JSON key"):
+        execute(
+            config,
+            box,
+            {"v0": build},
+            destination,
+            schedule=[["v0", "aa"]],
+            suite="quick",
+            seed=1,
+            samples=2,
+            sample_ms=1,
+            case_filter="find/runtime/text/start/64/1",
+        )
+    assert not (destination / "memmem-probe.json").exists()
+    assert not any(c.startswith("systemd-run") for c in box.commands)
+
+
 def test_probe_library_mismatch_fails(config: Config, monkeypatch: pytest.MonkeyPatch) -> None:
     destination, build = setup(config)
     box: Any = FakeBox()
