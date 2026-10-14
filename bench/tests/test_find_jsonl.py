@@ -18,7 +18,7 @@ PROBE: dict[str, Any] = {
 
 
 def records(
-    case_filter: str = "find/runtime/text/start/64/1", *, multiplier: int = 1
+    case_filter: str = "find/runtime/text/start/64/1", *, multiplier: int = 1, suite: str = "quick"
 ) -> list[dict[str, Any]]:
     meta = {
         "type": "meta",
@@ -28,9 +28,10 @@ def records(
         "zig": "0.16.0",
         "target": "aarch64-linux-gnu",
         "cpu": "generic",
+        "dispatch": None,
         "optimize": "ReleaseFast",
         "link_libc": True,
-        "suite": "quick",
+        "suite": suite,
         "seed": 1,
         "samples": 2,
         "sample_ms": 1,
@@ -43,7 +44,7 @@ def records(
     }
     cases: list[dict[str, Any]] = []
     samples: list[dict[str, Any]] = []
-    for case in inventory("quick", case_filter).values():
+    for case in inventory(suite, case_filter).values():
         oracle = 0 if case["nlen"] == 0 else case["requested"]
         cases.append({"type": "case", **case, "oracle": oracle})
         for s in range(2):
@@ -207,13 +208,62 @@ def test_independent_probe_offset(tmp_path: Path) -> None:
 
 def test_boundary_inventory_and_filter_stability() -> None:
     cases = inventory("standard")
-    assert len(cases) == 209
+    assert len(cases) == 219
     assert {0, 1, 2, 3, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257, 512, 1024, 4096} <= {
         c["nlen"] for c in cases.values()
     }
-    assert {"random", "text", "low", "uniform", "periodic", "prefix", "suffix", "near"} == {
+    assert {"random", "text", "low", "uniform", "periodic", "prefix", "suffix", "near", "rare"} == {
         c["pattern"] for c in cases.values()
     }
     selected = inventory("standard", "prefix")
     assert selected == {key: c for key, c in cases.items() if "prefix" in key}
-    assert all(c["hay_off"] != c["needle_off"] for c in cases.values())
+    aligned = [c for c in cases.values() if "/align/" in c["case"]]
+    assert len(aligned) == 10
+    assert {(c["hay_off"], c["needle_off"]) for c in aligned} == {
+        (0, 0),
+        (1, 0),
+        (0, 1),
+        (63, 0),
+        (0, 63),
+    }
+
+
+def expected_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    from fastmem_bench.find_analysis import EXPECTED_FIELDS
+
+    return {
+        key: (meta["dispatch"] or {}).get("level") if key == "dispatch_level" else meta[key]
+        for key in EXPECTED_FIELDS
+    }
+
+
+@pytest.mark.parametrize(
+    "case_filter",
+    [
+        "find/runtime/text/end/4096/8",
+        "find/runtime/text/absent/64/16",
+        "find/runtime/low/middle/64/2",
+    ],
+)
+def test_mislabeled_first_matches_rejected(tmp_path: Path, case_filter: str) -> None:
+    values = records("", suite="standard")
+    case = next(c for c in values if c.get("case") == case_filter and c["type"] == "case")
+    case["oracle"] = 0  # Valid bounds, coherent samples, but wrong FIRST match.
+    for sample in values:
+        if sample["type"] == "sample" and sample["case"] == case_filter:
+            sample["result"] = 0
+            sample["checksum"] = sample["iters"]
+    with pytest.raises(ValueError, match="first-match"):
+        parse(save(tmp_path / "bad.jsonl", values))
+
+
+def test_dispatch_required_and_expected_level_enforced(tmp_path: Path) -> None:
+    values = records()
+    values[0].update(target="x86_64-linux-gnu", cpu="x86_64")
+    with pytest.raises(ValueError, match="dispatch evidence"):
+        parse(save(tmp_path / "bad.jsonl", values))
+    values[0]["dispatch"] = {"level": "generic", "kernel": "zig-simd"}
+    with pytest.raises(ValueError, match="Wrong dispatch_level"):
+        parse(save(tmp_path / "bad.jsonl", values), expected={"dispatch_level": "znver4"})
+    values[0]["dispatch"]["level"] = "znver4"
+    parse(save(tmp_path / "good.jsonl", values), expected={"dispatch_level": "znver4"})

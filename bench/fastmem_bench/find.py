@@ -9,11 +9,14 @@ import click
 from ec2bench.cli import box_for
 from ec2bench.config import Config
 from ec2bench.fleet import Fleet, tags
+from ec2bench.isolation import select_cpu
 from ec2bench.parallel import parallel
 from ec2bench.runs import create_run, validate_label, write_manifest
-from fastmem_bench.build import CPU_MODES, build_cpu, resolve
+from fastmem_bench.analysis import validate_effect
+from fastmem_bench.build import CPU_MODES, build_cpu, expected_dispatch, resolve
 from fastmem_bench.find_analysis import analyze
 from fastmem_bench.find_build import build
+from fastmem_bench.find_jsonl import validate_resolution
 from fastmem_bench.find_protocol import execute
 from fastmem_bench.protocol import orders
 
@@ -53,6 +56,8 @@ def find(
         validate_label(label)
     except ValueError as error:
         raise click.ClickException(str(error)) from error
+    effect = config.project.get("minimum_effect", 0.0)
+    validate_effect(effect)
     fleet = Fleet(config)
     names = config.select(targets)
     if not names:
@@ -89,7 +94,11 @@ def find(
             "aa": True,
             "schedule": schedule,
             "schedule_method": "seeded-balanced-latin-square",
-            "config": {"targets": config.targets},
+            "minimum_effect": effect,
+            "config": {
+                "targets": config.targets,
+                "project": {"remote_dir": config.project["remote_dir"]},
+            },
             "sources": [
                 {
                     "variant": s.variant,
@@ -110,7 +119,11 @@ def find(
         destination = path / name
         builds = {
             s.variant: build(
-                s, destination / "build" / s.variant, target=settings["zig_target"], cpu=cpu
+                s,
+                destination / "build" / s.variant,
+                target=settings["zig_target"],
+                cpu=cpu,
+                dispatch_level=expected_dispatch(settings, cpu_mode),
             )
             for s in sources
         }
@@ -179,11 +192,13 @@ def find(
 
 def analyze_target(destination: Path) -> dict[str, Any]:
     experiment = json.loads((destination / "experiment.json").read_text())
+    manifest = json.loads((destination.parent / "manifest.json").read_text())
     result = analyze(
         destination / "raw",
         experiment["expected"],
         rounds=experiment["rounds"],
         probe=json.loads((destination / "memmem-probe.json").read_text()),
+        minimum_effect=manifest["minimum_effect"],
     )
     # Tie saved provenance to the retained exact executable bytes, not just metadata strings.
     import hashlib
@@ -194,6 +209,9 @@ def analyze_target(destination: Path) -> dict[str, Any]:
             raise ValueError("Saved search binary no longer matches build evidence")
         if item["codegen"]["binary_sha256"] != experiment["expected"][variant]["binary_sha256"]:
             raise ValueError("Manifest build evidence disagrees with raw expected hash")
+    protocol = json.loads((destination / "protocol.json").read_text())
+    validate_protocol(destination, manifest, experiment, protocol)
+    result["protocol"] = protocol
     result["builds"] = experiment["builds"]
     result["codegen_status"] = {
         v: item["codegen"]["status"] for v, item in experiment["builds"].items()
@@ -203,6 +221,85 @@ def analyze_target(destination: Path) -> dict[str, Any]:
         "No search goal verdict; pending-kernel or manual codegen review is not acceptance"
     )
     return result
+
+
+def validate_protocol(
+    destination: Path,
+    manifest: dict[str, Any],
+    experiment: dict[str, Any],
+    protocol: dict[str, Any],
+) -> None:
+    """Retained isolation provenance is required, not an optional offline annotation."""
+    expected = experiment["expected"]
+    name = destination.name
+    variants = [s["variant"] for s in manifest["sources"]] + ["aa"]
+    schedule = orders(variants, manifest["rounds"], manifest["seed"])
+    if (
+        manifest["schedule"] != schedule
+        or protocol.get("schedule") != schedule
+        or experiment["rounds"] != manifest["rounds"]
+        or set(expected) != set(variants)
+        or set(experiment["builds"]) != set(variants)
+        or protocol.get("expected") != expected
+        or protocol.get("isolation") != "systemd-cpuset-taskset-v1"
+    ):
+        raise ValueError("Saved search protocol disagrees with manifest/schedule/builds")
+    settings = manifest["config"]["targets"][name]
+    level = expected_dispatch(settings, manifest["cpu_mode"])
+    revisions = {s["variant"]: s["revision"] for s in manifest["sources"]}
+    revisions["aa"] = revisions["v0"]
+    for variant, meta in expected.items():
+        if meta["rev"] != revisions[variant]:
+            raise ValueError("Expected search revision disagrees with manifest source")
+        if (
+            meta["dispatch_level"] != level
+            or meta["cpu"] != build_cpu(settings, manifest["cpu_mode"])
+            or meta["target"] != settings["zig_target"]
+        ):
+            raise ValueError("Expected search dispatch/build disagrees with configured target")
+        if any(meta[k] != manifest[k] for k in ("suite", "seed", "samples", "sample_ms", "filter")):
+            raise ValueError("Expected search configuration disagrees with manifest")
+    facts = json.loads((destination / "facts.json").read_text())
+    if (
+        protocol.get("instance_id") != manifest["instances"][name]
+        or facts.get("instance_id") != protocol["instance_id"]
+    ):
+        raise ValueError("Saved search instance identity mismatch")
+    if type(protocol.get("cpu")) is not int or protocol["cpu"] != select_cpu(facts["topology"])[0]:
+        raise ValueError("Invalid saved isolated CPU")
+    probe = json.loads((destination / "memmem-probe.json").read_text())
+    if protocol.get("probe") != probe:
+        raise ValueError("Saved search protocol probe mismatch")
+    validate_resolution(probe)
+    remote = (
+        manifest["config"]["project"]["remote_dir"].rstrip("/")
+        + "/"
+        + destination.parent.name
+        + "-find"
+    )
+    commands = {
+        f"{v}/r{i}": [
+            f"{remote}/bin/{'v0' if v == 'aa' else v}/bench-find",
+            "--suite",
+            manifest["suite"],
+            "--seed",
+            str(manifest["seed"]),
+            "--samples",
+            str(manifest["samples"]),
+            "--sample-ms",
+            str(manifest["sample_ms"]),
+            "--filter",
+            manifest["filter"],
+        ]
+        for i, order in enumerate(schedule)
+        for v in order
+    }
+    if (
+        protocol.get("remote") != remote
+        or protocol.get("commands") != commands
+        or json.loads((destination / "commands.json").read_text()) != commands
+    ):
+        raise ValueError("Saved search commands disagree with manifest/round schedule")
 
 
 @click.command(name="find-analyze")
@@ -216,7 +313,7 @@ def find_analyze(run_dir: Path) -> None:
     for name in manifest["targets"]:
         try:
             targets[name] = analyze_target(run_dir / name)
-        except (ValueError, OSError, KeyError) as error:
+        except (ValueError, OSError, KeyError, TypeError) as error:
             targets[name] = {"status": "failed", "error": str(error)}
     failed = any(r["status"] == "failed" for r in targets.values())
     summary = {

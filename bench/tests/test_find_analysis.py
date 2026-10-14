@@ -4,15 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from fastmem_bench.find_analysis import EXPECTED_FIELDS, analyze
-from tests.test_find_jsonl import PROBE, records, save
+from fastmem_bench.find_analysis import analyze
+from tests.test_find_jsonl import PROBE, expected_meta, records, save
 
 
 def rounds(raw: Path, *, count: int = 5) -> dict:
     meta = records("")[0]
-    expected = {
-        variant: {key: meta[key] for key in EXPECTED_FIELDS} for variant in ("v0", "v1", "aa")
-    }
+    expected = {variant: expected_meta(meta) for variant in ("v0", "v1", "aa")}
     for variant in expected:
         for index in range(count):
             save(
@@ -93,3 +91,34 @@ def test_outlier_stays_in_the_exact_interval(tmp_path: Path) -> None:
     # Removing the high baseline process would make the independent interval [2, 2].
     assert all(r["ci95"][0] == pytest.approx(0.2) for r in revisions)
     assert all(r["ci95"][1] == pytest.approx(2) for r in revisions)
+
+
+def test_minimum_effect_and_pooled_size_pair_floors(tmp_path: Path) -> None:
+    expected = rounds(tmp_path)
+    result = analyze(tmp_path, expected, rounds=5, probe=PROBE, minimum_effect=2.0)
+    assert result["minimum_effect"] == 2.0
+    assert all(not r["significant"] for r in result["rows"])
+    aligned = [r for r in result["rows"] if "/align/" in r["case"]]
+    assert len({r["floor_group"] for r in aligned}) == 1
+    assert {r["noise_floor"] for r in aligned} == {0.0}
+    assert len(result["noise_floors"]) < len(result["cases"])
+    with pytest.raises(ValueError, match="effect"):
+        analyze(tmp_path, expected, rounds=5, probe=PROBE, minimum_effect=float("nan"))
+
+
+def test_wrong_dispatch_in_any_offline_round_fails(tmp_path: Path) -> None:
+    expected = rounds(tmp_path)
+    for variant in expected:
+        expected[variant].update(cpu="x86_64", target="x86_64-linux-gnu", dispatch_level="znver4")
+        for index in range(5):
+            values = records("")
+            values[0].update(
+                cpu="x86_64",
+                target="x86_64-linux-gnu",
+                dispatch={"level": "znver4", "kernel": "tiered"},
+            )
+            if variant == "aa" and index == 4:
+                values[0]["dispatch"]["level"] = "generic"
+            save(tmp_path / variant / f"r{index}.jsonl", values)
+    with pytest.raises(ValueError, match="Wrong dispatch_level"):
+        analyze(tmp_path, expected, rounds=5, probe=PROBE)

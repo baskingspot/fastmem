@@ -1,4 +1,12 @@
-"""Strict, separate fastmem-find/1 dialect. Case inventory is part of the protocol."""
+"""Strict, separate fastmem-find/1 dialect. Case inventory is part of the protocol.
+
+This is a deliberately sparse stress inventory, not a user-frequency distribution.
+Every case has equal geometric-mean weight (fixed/direct/indirect stay separate).
+Standard emphasizes end/absence, boundaries and long-prefix scaling. The ten extra
+alignment cases hold bytes constant for random and prefix end/8192/33 with 0/0,
+1/0, 0/1, 63/0, 0/63; the older nine correlated pairs are only sparse coverage.
+Pattern means and >10% regression rows remain visible; no overall mean proves
+worst-case complexity or mission-level acceptance."""
 
 import json
 from dataclasses import dataclass
@@ -27,7 +35,9 @@ Implementation = Literal[
     "std_fixed",
     "fastmem_fixed",
 ]
-Pattern = Literal["random", "text", "low", "uniform", "periodic", "prefix", "suffix", "near"]
+Pattern = Literal[
+    "random", "text", "low", "uniform", "periodic", "prefix", "suffix", "near", "rare"
+]
 Position = Literal["absent", "start", "middle", "end"]
 
 
@@ -49,6 +59,13 @@ class Resolution(Strict):
     memmem: Evidence
 
 
+class Dispatch(Strict):
+    level: Literal[
+        "generic", "x86_64_v3", "x86_64_v4", "sapphirerapids", "graniterapids", "znver4", "znver5"
+    ]
+    kernel: str = Field(min_length=1)
+
+
 class Meta(Strict):
     type: Literal["meta"]
     dialect: Literal["fastmem-find"]
@@ -57,6 +74,7 @@ class Meta(Strict):
     zig: str = Field(min_length=1)
     target: str = Field(pattern=r"^(x86_64|aarch64)-linux-gnu$")
     cpu: str = Field(min_length=1)
+    dispatch: Dispatch | None
     optimize: Literal["ReleaseFast"]
     link_libc: Literal[True]
     suite: Literal["quick", "standard"]
@@ -109,13 +127,25 @@ def inventory(  # noqa: C901, PLR0912 — the designed protocol inventory stays 
 ) -> dict[str, dict[str, Any]]:
     cases: dict[str, dict[str, Any]] = {}
 
-    def add(hl: int, nl: int, pattern: str, position: str, *, fixed: bool = False) -> None:
+    def add(
+        hl: int,
+        nl: int,
+        pattern: str,
+        position: str,
+        *,
+        fixed: bool = False,
+        offsets: tuple[int, int] | None = None,
+    ) -> None:
         index = len(cases)
         identity = f"find/{'fixed' if fixed else 'runtime'}/{pattern}/{position}/{hl}/{nl}"
+        if offsets is not None:
+            identity += f"/align/{offsets[0]}/{offsets[1]}"
         if identity in cases:
             raise ValueError(f"Duplicate designed case {identity}")
         requested = (
-            None
+            0
+            if nl == 0
+            else None
             if position == "absent" or nl > hl
             else {"start": 0, "middle": (hl - nl) // 2, "end": hl - nl}[position]
         )
@@ -126,8 +156,12 @@ def inventory(  # noqa: C901, PLR0912 — the designed protocol inventory stays 
             "pattern": pattern,
             "position": position,
             "requested": requested,
-            "hay_off": (0, 1, 15, 16, 17, 31, 32, 33, 63)[index % 9],
-            "needle_off": (3, 0, 33, 1, 31, 17, 63, 16, 32)[index % 9],
+            "hay_off": offsets[0]
+            if offsets is not None
+            else (0, 1, 15, 16, 17, 31, 32, 33, 63)[index % 9],
+            "needle_off": offsets[1]
+            if offsets is not None
+            else (3, 0, 33, 1, 31, 17, 63, 16, 32)[index % 9],
             "fixed": fixed,
             "impls": list(FIXED_IMPLEMENTATIONS if fixed else IMPLEMENTATIONS),
         }
@@ -172,9 +206,9 @@ def inventory(  # noqa: C901, PLR0912 — the designed protocol inventory stays 
         for nl in (33, 257, 1024, 4096):
             add(65536, nl, "near", "absent")
         for nl in (512, 1024, 4096):
-            add(nl, nl, "random", "start")
-            add(nl + 1, nl, "random", "end")
-            add(262144, nl, "random", "absent")
+            add(nl, nl, "rare", "start")
+            add(nl + 1, nl, "rare", "end")
+            add(262144, nl, "rare", "absent")
         for hl in range(9):
             for nl in (0, 1, 2, 3, 9):
                 add(hl, nl, "random", "end")
@@ -222,6 +256,9 @@ def inventory(  # noqa: C901, PLR0912 — the designed protocol inventory stays 
         add(65536, 1024, "suffix", "absent")
     for nl in FIXED_LENGTHS:
         add(4096, nl, "text", "end", fixed=True)
+    for pattern in ("random", "prefix"):
+        for offsets in ((0, 0), (1, 0), (0, 1), (63, 0), (0, 63)):
+            add(8192, 33, pattern, "end", offsets=offsets)
     return {key: value for key, value in cases.items() if case_filter in key}
 
 
@@ -258,7 +295,7 @@ class Measurement:
     samples: list[dict[str, Any]]
 
 
-def parse(  # noqa: C901, PLR0912 — validate the complete atomic protocol seam
+def parse(  # noqa: C901, PLR0912, PLR0915 — validate the complete atomic protocol seam
     path: Path, *, expected: dict[str, Any] | None = None, probe: dict[str, Any] | None = None
 ) -> Measurement:
     records = [
@@ -274,9 +311,17 @@ def parse(  # noqa: C901, PLR0912 — validate the complete atomic protocol seam
         raise ValueError("Wrong literal scalar type")
     if len(meta["rev"].encode()) > 64:
         raise ValueError("Wrong fixed-width revision label")
+    dispatching = meta["target"].startswith("x86_64-") and meta["cpu"] in (
+        "x86_64",
+        "baseline",
+        "x86_64_v2",
+    )
+    if dispatching != (meta["dispatch"] is not None):
+        raise ValueError("Missing or unexpected runtime dispatch evidence")
     for key, value in (expected or {}).items():
-        if meta.get(key) != value:
-            raise ValueError(f"Wrong {key}: {meta.get(key)!r}, expected {value!r}")
+        actual = (meta["dispatch"] or {}).get("level") if key == "dispatch_level" else meta.get(key)
+        if actual != value:
+            raise ValueError(f"Wrong {key}: {actual!r}, expected {value!r}")
     validate_resolution(meta["resolution"], probe)
     end = End.model_validate(records[-1])
     designed = inventory(meta["suite"], meta["filter"])
@@ -293,15 +338,9 @@ def parse(  # noqa: C901, PLR0912 — validate the complete atomic protocol seam
             if {key: case[key] for key in designed[identity]} != designed[identity]:
                 raise ValueError("Case metadata disagrees with suite inventory")
             answer, hl, nl = case["oracle"], case["hlen"], case["nlen"]
-            if (
-                (nl == 0 and answer != 0)
-                or (nl > hl and answer is not None)
-                or (answer is not None and (nl > hl or answer > hl - nl))
-                or (
-                    case["requested"] is not None and (answer is None or answer > case["requested"])
-                )
-            ):
-                raise ValueError("Invalid independent oracle answer")
+            advertised = 0 if nl == 0 else case["requested"]
+            if answer != advertised or (answer is not None and (nl > hl or answer > hl - nl)):
+                raise ValueError("Invalid independent oracle first-match answer")
             cases[identity] = case
         else:
             sampling = True

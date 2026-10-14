@@ -47,11 +47,21 @@ def execute(
     }
     commands: dict[str, list[str]] = {}
     box.run("mkdir -p " + " ".join(shlex.quote(f"{remote}/raw/{v}") for v in variants))
-    cpu = None
+    protocol: dict[str, Any] = {
+        "cpu": None,
+        "isolation": "systemd-cpuset-taskset-v1",
+        "remote": remote,
+        "instance_id": box.instance_id,
+        "schedule": schedule,
+        "commands": commands,
+        "probe": probe,
+        "expected": expected,
+    }
     try:
         if not facts.get("topology"):
             raise ValueError("CPU topology unavailable; refusing an unisolated measurement")
         with isolate(box, facts["topology"]) as cpu:
+            protocol["cpu"] = cpu
             try:
                 for index, order in enumerate(schedule):
                     for variant in order:
@@ -75,6 +85,9 @@ def execute(
                         (destination / "commands.json").write_text(
                             json.dumps(commands, indent=2) + "\n"
                         )
+                        (destination / "protocol.json").write_text(
+                            json.dumps(protocol, indent=2) + "\n"
+                        )
                         run_isolated(
                             box,
                             cpu,
@@ -93,10 +106,4 @@ def execute(
                 stop_isolated(box, destination.parent.name + "-find")
     finally:
         box.download(remote + "/raw", destination / "raw")
-    return {
-        "cpu": cpu,
-        "instance_id": box.instance_id,
-        "commands": commands,
-        "probe": probe,
-        "expected": expected,
-    }
+    return protocol

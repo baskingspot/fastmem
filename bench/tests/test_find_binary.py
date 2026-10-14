@@ -29,8 +29,8 @@ def test_quick_parses_answers_order_and_binary_hash(tmp_path: Path) -> None:
     path.write_text(result.stdout)
     probe = json.loads(invoke("--probe").stdout)
     measurement = parse(path, probe=probe)
-    assert len(measurement.cases) == 37
-    assert len(measurement.samples) == 316
+    assert len(measurement.cases) == 47
+    assert len(measurement.samples) == 416
     assert measurement.meta["binary_sha256"] == hashlib.sha256(BINARY.read_bytes()).hexdigest()
     # Empty needle answers and intentional late prefix/suffix mismatch are independently checked.
     for case in measurement.cases.values():
@@ -40,8 +40,9 @@ def test_quick_parses_answers_order_and_binary_hash(tmp_path: Path) -> None:
             assert case["oracle"] is None
 
 
-def test_standard_inventory_matches_binary() -> None:
-    result = invoke("--suite", "standard", "--list")
+@pytest.mark.parametrize("seed", [0, 1, 2, 42, 2**32 - 1, 2**64 - 1])
+def test_standard_inventory_matches_binary(seed: int) -> None:
+    result = invoke("--suite", "standard", "--list", "--seed", str(seed))
     assert result.returncode == 0, result.stderr
     records: list[dict[str, Any]] = [json.loads(line) for line in result.stdout.splitlines()]
     designed = inventory("standard")
@@ -49,6 +50,7 @@ def test_standard_inventory_matches_binary() -> None:
     assert set(actual) == set(designed)
     for identity, expected in designed.items():
         assert {key: actual[identity][key] for key in expected} == expected
+        assert actual[identity]["oracle"] == expected["requested"]
 
 
 @pytest.mark.parametrize(
@@ -69,9 +71,10 @@ def test_invalid_cli_no_success_artifact(args: tuple[str, ...]) -> None:
     assert not result.stdout
 
 
-def test_executable_search_audit_is_explicitly_pending(tmp_path: Path) -> None:
-    evidence = inspect(BINARY, tmp_path / "executable.asm")
-    assert evidence["status"] == "pending-kernel"
+def test_integrated_executable_search_audit(tmp_path: Path) -> None:
+    evidence = inspect(BINARY, tmp_path / "executable.asm", kernel_pending=False)
+    assert evidence["status"] in {"clean", "pending-review"}
+    assert evidence["kernel_pending"] is False
     assert evidence["anti_hoist_status"] == "manual-review-required"
     assert evidence["followed_callees"]
     assert "runIndirect" in " ".join(evidence["timed_roots"])

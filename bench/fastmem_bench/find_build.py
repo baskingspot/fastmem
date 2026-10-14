@@ -21,6 +21,7 @@ class Build:
     zig: str
     command: list[str]
     codegen: dict[str, Any]
+    dispatch_level: str | None = None
 
     def expected(
         self,
@@ -35,6 +36,7 @@ class Build:
         return {
             "rev": self.source.revision,
             "cpu": self.cpu,
+            "dispatch_level": self.dispatch_level,
             "target": self.target,
             "zig": self.zig,
             "binary_sha256": self.codegen["binary_sha256"],
@@ -47,7 +49,9 @@ class Build:
         }
 
 
-def build(source: Source, destination: Path, *, target: str, cpu: str) -> Build:
+def build(
+    source: Source, destination: Path, *, target: str, cpu: str, dispatch_level: str | None = None
+) -> Build:
     if len(source.revision.encode()) > 64:
         raise ValueError("Revision labels must fit the fixed 64-byte build label")
     destination.mkdir(parents=True, exist_ok=True)
@@ -89,4 +93,4 @@ def build(source: Source, destination: Path, *, target: str, cpu: str) -> Build:
     (destination / "codegen.json").write_text(json.dumps(evidence, indent=2) + "\n")
     if evidence["status"] == "invalid":
         raise ValueError(f"Search delegation audit failed; read {destination / 'codegen.json'}")
-    return Build(source, binary, cpu, target, zig, command, evidence)
+    return Build(source, binary, cpu, target, zig, command, evidence, dispatch_level)

@@ -94,6 +94,7 @@ def test_protocol_isolated_same_binary_aa_no_glibc_disassembly(config: Config) -
     assert all("taskset -c 3" in c and "--slice=bench.slice" in c for c in commands)
     assert all("/bin/v0/bench-find" in c for c in commands)
     assert result["expected"]["aa"] == result["expected"]["v0"]
+    assert json.loads((destination / "protocol.json").read_text()) == result
     assert all("objdump" not in c for c in box.commands)
     assert len([c for c in box.commands if "AllowedCPUs=0-3" in c]) == 3
 
@@ -121,6 +122,7 @@ def test_failure_restores_and_downloads(config: Config, bad: bool) -> None:
     assert len([c for c in box.commands if "AllowedCPUs=0-3" in c]) == 3
     assert any(c.startswith("systemctl stop ") and "ec2bench-run-" in c for c in box.commands)
     assert (destination / "commands.json").exists()
+    assert json.loads((destination / "protocol.json").read_text())["cpu"] == 3
 
 
 def test_probe_library_mismatch_fails(config: Config, monkeypatch: pytest.MonkeyPatch) -> None:

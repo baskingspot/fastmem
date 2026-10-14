@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastmem_bench.analysis import (
+    FLOOR_QUANTILE,
     MIN_ROUNDS,
     compare_independent,
     compare_paired,
@@ -15,12 +16,14 @@ from fastmem_bench.analysis import (
     quantile,
     round_medians,
     significant,
+    validate_effect,
 )
 from fastmem_bench.find_jsonl import parse
 
 EXPECTED_FIELDS = {
     "rev",
     "cpu",
+    "dispatch_level",
     "target",
     "zig",
     "binary_sha256",
@@ -33,7 +36,7 @@ EXPECTED_FIELDS = {
 }
 
 
-def analyze(  # noqa: C901, PLR0912 — exact paired/independent cells share one validated inventory
+def analyze(  # noqa: C901, PLR0912, PLR0915 — exact paired/independent cells share one validated inventory
     raw: Path,
     expected: dict[str, dict[str, Any]],
     *,
@@ -41,8 +44,10 @@ def analyze(  # noqa: C901, PLR0912 — exact paired/independent cells share one
     probe: dict[str, Any],
     baseline: str = "v0",
     aa: str = "aa",
+    minimum_effect: float = 0.0,
 ) -> dict[str, Any]:
     """Require the complete manifest inventory; reject mixed seeds/configs/builds/results."""
+    validate_effect(minimum_effect)
     if rounds < 1 or baseline not in expected or aa not in expected:
         raise ValueError("Search analysis requires positive rounds, baseline, and A/A")
     if any(set(meta) != EXPECTED_FIELDS for meta in expected.values()):
@@ -66,6 +71,7 @@ def analyze(  # noqa: C901, PLR0912 — exact paired/independent cells share one
                     "zig",
                     "target",
                     "cpu",
+                    "dispatch",
                     "suite",
                     "seed",
                     "samples",
@@ -138,18 +144,28 @@ def analyze(  # noqa: C901, PLR0912 — exact paired/independent cells share one
             if variant != baseline:
                 for impl in detail["impls"]:
                     compare(case, variant, impl, baseline, impl, "revision")
+    # Search-specific analogue of the per-operation/size floor: exact (haystack,
+    # needle) lengths and runtime/fixed path, pooled across patterns, positions,
+    # alignments and all implementations. Length pairs matter for search cost;
+    # per-case pools would leave only two or five A/A estimates.
+    floor_groups = {
+        case: f"{d['hlen']}/{d['nlen']}/{'fixed' if d['fixed'] else 'runtime'}"
+        for case, d in details.items()
+    }
     null: dict[str, list[float]] = defaultdict(list)
     for row in rows:
         if row["comparison"] == "A/A":
-            null[row["case"]].append(abs(math.log(row["ratio"])))
-    floors = {case: math.expm1(quantile(values, 0.95)) for case, values in null.items()}
+            null[floor_groups[row["case"]]].append(abs(math.log(row["ratio"])))
+    floors = {case: math.expm1(quantile(values, FLOOR_QUANTILE)) for case, values in null.items()}
     groups: dict[tuple[str, str, str], list[float]] = defaultdict(list)
     for row in rows:
-        row["noise_floor"] = floors[row["case"]]
+        row["floor_group"] = floor_groups[row["case"]]
+        row["noise_floor"] = floors[row["floor_group"]]
+        row["minimum_effect"] = minimum_effect
         row["significant"] = (
             row["comparison"] != "A/A"
             and rounds >= MIN_ROUNDS
-            and significant(tuple(row["ci95"]), row["noise_floor"])
+            and significant(tuple(row["ci95"]), max(row["noise_floor"], minimum_effect))
         )
         # Keep adversarial profile means separate; an overall mean cannot hide them.
         groups[row["variant"], row["comparison"], details[row["case"]]["pattern"]].append(
@@ -165,6 +181,8 @@ def analyze(  # noqa: C901, PLR0912 — exact paired/independent cells share one
         "cases": details,
         "rows": rows,
         "noise_floors": floors,
+        "floor_quantile": FLOOR_QUANTILE,
+        "minimum_effect": minimum_effect,
         "outliers": [
             {"variant": key[0], "case": key[1], "impl": key[2], "round": i}
             for key, indices in flags.items()

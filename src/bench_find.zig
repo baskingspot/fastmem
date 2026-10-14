@@ -15,32 +15,36 @@ const Impl = enum {
     std_fixed,
     fastmem_fixed,
 };
-const Pattern = enum { random, text, low, uniform, periodic, prefix, suffix, near };
+const Pattern = enum { random, text, low, uniform, periodic, prefix, suffix, near, rare };
 const Position = enum { absent, start, middle, end };
 const Suite = enum { quick, standard };
 const max_iters = 1 << 30;
 const missing = std.math.maxInt(usize);
-const SearchFn = *const fn ([*]const u8, usize, [*]const u8, usize) callconv(.c) usize;
-const MemmemFn = *const fn ([*]const u8, usize, [*]const u8, usize) callconv(.c) ?[*]const u8;
-var glibc_function: MemmemFn = undefined;
+// All indirect destinations use memmem's pointer ABI and common normalization.
+const SearchFn = *const fn ([*]const u8, usize, [*]const u8, usize) callconv(.c) ?[*]const u8;
+var glibc_function: SearchFn = undefined;
 
 fn encoded(answer: ?usize) usize {
     return answer orelse missing;
 }
-noinline fn stdWrapper(h: [*]const u8, hl: usize, n: [*]const u8, nl: usize) callconv(.c) usize {
-    return encoded(std.mem.find(u8, h[0..hl], n[0..nl]));
+noinline fn stdWrapper(
+    h: [*]const u8,
+    hl: usize,
+    n: [*]const u8,
+    nl: usize,
+) callconv(.c) ?[*]const u8 {
+    return if (std.mem.find(u8, h[0..hl], n[0..nl])) |i| h + i else null;
 }
 noinline fn fastmemWrapper(
     h: [*]const u8,
     hl: usize,
     n: [*]const u8,
     nl: usize,
-) callconv(.c) usize {
-    return encoded(fastmem.find(u8, h[0..hl], n[0..nl]));
+) callconv(.c) ?[*]const u8 {
+    return if (fastmem.find(u8, h[0..hl], n[0..nl])) |i| h + i else null;
 }
-noinline fn glibcWrapper(h: [*]const u8, hl: usize, n: [*]const u8, nl: usize) callconv(.c) usize {
-    const function = @as(*const volatile MemmemFn, &glibc_function).*;
-    const result = function(h, hl, n, nl) orelse return missing;
+inline fn normalize(result_ptr: ?[*]const u8, h: [*]const u8, hl: usize, nl: usize) usize {
+    const result = result_ptr orelse return missing;
     const address = @intFromPtr(result);
     const base = @intFromPtr(h);
     if (address < base or address - base > hl or nl > hl - (address - base))
@@ -51,7 +55,6 @@ comptime {
     // Private named inspection roots, not a public libc surface.
     @export(&stdWrapper, .{ .name = "bench_find_std" });
     @export(&fastmemWrapper, .{ .name = "bench_find_fastmem" });
-    @export(&glibcWrapper, .{ .name = "bench_find_glibc" });
 }
 
 const Evidence = struct {
@@ -245,11 +248,11 @@ fn buildCases(a: Allocator, cfg: Config) ![]Case {
         // Dense almost-copies retain most candidate pairs but fail late verification.
         for ([_]usize{ 33, 257, 1024, 4096 }) |nl|
             try addCase(a, &cases, cfg, 65536, nl, .near, .absent, false);
-        // Saturated byte sets and long needles with the only rare byte beyond 255.
+        // Saturated common alphabet; the only rare needle byte is explicitly at 300.
         for ([_]usize{ 512, 1024, 4096 }) |nl| {
-            try addCase(a, &cases, cfg, nl, nl, .random, .start, false);
-            try addCase(a, &cases, cfg, nl + 1, nl, .random, .end, false);
-            try addCase(a, &cases, cfg, 262144, nl, .random, .absent, false);
+            try addCase(a, &cases, cfg, nl, nl, .rare, .start, false);
+            try addCase(a, &cases, cfg, nl + 1, nl, .rare, .end, false);
+            try addCase(a, &cases, cfg, 262144, nl, .rare, .absent, false);
         }
         for (0..9) |hl| for ([_]usize{ 0, 1, 2, 3, 9 }) |nl|
             try addCase(a, &cases, cfg, hl, nl, .random, .end, false);
@@ -276,6 +279,18 @@ fn buildCases(a: Allocator, cfg: Config) ![]Case {
         try addCase(a, &cases, cfg, 65536, 1024, .suffix, .absent, false);
     }
     for (fixed_lengths) |nl| try addCase(a, &cases, cfg, 4096, nl, .text, .end, true);
+    // Controlled single-axis variations, with identical bytes across alignments.
+    for ([_]Pattern{ .random, .prefix }) |pattern| {
+        for ([_][2]usize{ .{ 0, 0 }, .{ 1, 0 }, .{ 0, 1 }, .{ 63, 0 }, .{ 0, 63 } }) |offsets| {
+            try addCase(a, &cases, cfg, 8192, 33, pattern, .end, false);
+            const case = &cases.items[cases.items.len - 1];
+            case.id = try std.fmt.allocPrint(a, "{s}/align/{d}/{d}", .{
+                case.id, offsets[0], offsets[1],
+            });
+            case.hay_off = offsets[0];
+            case.needle_off = offsets[1];
+        }
+    }
     var selected: std.ArrayList(Case) = .empty;
     for (cases.items) |case| if (std.mem.find(u8, case.id, cfg.filter) != null)
         try selected.append(a, case);
@@ -288,11 +303,13 @@ fn makeInputs(a: Allocator, cfg: Config, case: Case) !Inputs {
     const hay = hay_buffer[case.hay_off..][0..case.hlen];
     const needle_buffer = try a.alignedAlloc(u8, .@"64", case.nlen + case.needle_off + 64);
     const needle = needle_buffer[case.needle_off..][0..case.nlen];
-    var prng = std.Random.DefaultPrng.init(cfg.seed ^ std.hash.Wyhash.hash(0, case.id));
+    const identity = if (std.mem.find(u8, case.id, "/align/")) |i| case.id[0..i] else case.id;
+    var prng = std.Random.DefaultPrng.init(cfg.seed ^ std.hash.Wyhash.hash(0, identity));
     const random = prng.random();
     const text = "the quick brown fox searches a reproducible synthetic document. ";
     for (hay, 0..) |*byte, i| byte.* = switch (case.pattern) {
         .random => random.int(u8),
+        .rare => @intCast(i % 255),
         .text => text[i % text.len],
         .low => random.int(u8) % 4,
         .uniform, .prefix, .suffix => 'a',
@@ -301,12 +318,14 @@ fn makeInputs(a: Allocator, cfg: Config, case: Case) !Inputs {
     };
     for (needle, 0..) |*byte, i| byte.* = switch (case.pattern) {
         .random => random.int(u8),
+        .rare => @intCast(i % 255),
         .text => text[(i + 13) % text.len],
         .low => random.int(u8) % 4,
         .uniform, .prefix, .suffix => 'a',
         .periodic => "abababa"[i % 7],
         .near => @as(u8, @intCast(i % 13)) + 'a',
     };
+    if (case.pattern == .rare) needle[300] = 255;
     if (case.pattern == .near) {
         for (hay, 0..) |*byte, i| {
             byte.* = needle[i % needle.len];
@@ -321,7 +340,9 @@ fn makeInputs(a: Allocator, cfg: Config, case: Case) !Inputs {
     if (case.fixed) inline for (fixed_lengths) |nl| {
         if (case.nlen == nl) @memcpy(needle, fixedNeedle(nl));
     };
-    const requested: ?usize = if (case.position == .absent or case.nlen > case.hlen)
+    const requested: ?usize = if (case.nlen == 0)
+        0
+    else if (case.position == .absent or case.nlen > case.hlen)
         null
     else switch (case.position) {
         .start => 0,
@@ -330,7 +351,21 @@ fn makeInputs(a: Allocator, cfg: Config, case: Case) !Inputs {
         .absent => unreachable,
     };
     if (requested) |pos| @memcpy(hay[pos..][0..needle.len], needle);
-    return .{ .hay = hay, .needle = needle, .oracle = oracle(hay, needle), .requested = requested };
+    // Repair accidental full matches right to left. Changing only the start byte
+    // cannot affect an already-checked later candidate or the implanted match.
+    // Late-mismatch profiles retain their candidate density; no universal sentinel.
+    if (needle.len != 0 and needle.len <= hay.len) {
+        var i = requested orelse (hay.len - needle.len + 1);
+        while (i != 0) {
+            i -= 1;
+            var j: usize = 0;
+            while (j < needle.len and hay[i + j] == needle[j]) : (j += 1) {}
+            if (j == needle.len) hay[i] ^= 128;
+        }
+    }
+    const answer = oracle(hay, needle);
+    if (answer != requested) return error.MislabeledFirstMatch;
+    return .{ .hay = hay, .needle = needle, .oracle = answer, .requested = requested };
 }
 // Deliberately independent byte loop; not a timed search implementation.
 noinline fn oracle(h: []const u8, n: []const u8) ?usize {
@@ -367,7 +402,12 @@ inline fn loopBody(
             .fastmem_direct => encoded(fastmem.find(u8, inputs.hay, inputs.needle)),
             .std_fixed => encoded(std.mem.find(u8, inputs.hay, fixedNeedle(fixed_len.?))),
             .fastmem_fixed => encoded(fastmem.find(u8, inputs.hay, fixedNeedle(fixed_len.?))),
-            else => function(inputs.hay.ptr, inputs.hay.len, inputs.needle.ptr, inputs.needle.len),
+            else => normalize(function(
+                inputs.hay.ptr,
+                inputs.hay.len,
+                inputs.needle.ptr,
+                inputs.needle.len,
+            ), inputs.hay.ptr, inputs.hay.len, inputs.needle.len),
         };
         checksum +%= @as(u64, answer) +% 1;
         std.mem.doNotOptimizeAway(answer);
@@ -413,7 +453,7 @@ fn runBatch(io: Io, impl: Impl, inputs: Inputs, iters: u64) !Result {
             const function: SearchFn = switch (impl) {
                 .std_indirect => &stdWrapper,
                 .fastmem_indirect => &fastmemWrapper,
-                .glibc_indirect => &glibcWrapper,
+                .glibc_indirect => glibc_function,
                 else => unreachable,
             };
             break :blk runIndirect(io, &function, inputs, iters);
@@ -466,6 +506,11 @@ fn jsonLine(w: *Io.Writer, value: anytype) !void {
     try std.json.Stringify.value(value, .{}, w);
     try w.writeByte('\n');
 }
+const Dispatch = struct { level: []const u8, kernel: []const u8 };
+fn dispatchSummary() ?Dispatch {
+    const level = fastmem.dispatch.level() orelse return null;
+    return .{ .level = @tagName(level), .kernel = fastmem.dispatch.kernelName().? };
+}
 fn run(init: std.process.Init) !void {
     const a = init.arena.allocator();
     const cfg = try parseArgs(try init.minimal.args.toSlice(a));
@@ -504,24 +549,24 @@ fn run(init: std.process.Init) !void {
         });
         if (cfg.list) continue;
         // All references and wrappers are checked even for fixed-only timing cases.
-        try checkAnswer(stdWrapper(
+        try checkAnswer(normalize(stdWrapper(
             inputs.hay.ptr,
             inputs.hay.len,
             inputs.needle.ptr,
             inputs.needle.len,
-        ), inputs.oracle);
-        try checkAnswer(fastmemWrapper(
+        ), inputs.hay.ptr, inputs.hay.len, inputs.needle.len), inputs.oracle);
+        try checkAnswer(normalize(fastmemWrapper(
             inputs.hay.ptr,
             inputs.hay.len,
             inputs.needle.ptr,
             inputs.needle.len,
-        ), inputs.oracle);
-        try checkAnswer(glibcWrapper(
+        ), inputs.hay.ptr, inputs.hay.len, inputs.needle.len), inputs.oracle);
+        try checkAnswer(normalize(glibc_function(
             inputs.hay.ptr,
             inputs.hay.len,
             inputs.needle.ptr,
             inputs.needle.len,
-        ), inputs.oracle);
+        ), inputs.hay.ptr, inputs.hay.len, inputs.needle.len), inputs.oracle);
         var iterations: [5]u64 = undefined;
         const target = @as(u64, cfg.sample_ms) * std.time.ns_per_ms;
         for (impls, 0..) |impl, i| {
@@ -568,6 +613,7 @@ fn run(init: std.process.Init) !void {
         .target = @tagName(builtin.cpu.arch) ++ "-" ++
             @tagName(builtin.os.tag) ++ "-" ++ @tagName(builtin.abi),
         .cpu = builtin.cpu.model.name,
+        .dispatch = dispatchSummary(),
         .optimize = @tagName(builtin.mode),
         .link_libc = true,
         .suite = cfg.suite,
@@ -647,4 +693,57 @@ test "resolution cannot be the executable masquerading as libc" {
         },
     };
     try std.testing.expectError(error.MemmemOutsideIndependentLibcHandle, validateResolution(bad));
+}
+
+test "constructed first matches and rare-byte/dense invariants across seeds" {
+    for ([_]u64{ 0, 1, 2, 42, 0x123456789abcdef0, std.math.maxInt(u64) }) |seed| {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const cfg: Config = .{ .suite = .standard, .seed = seed };
+        const cases = try buildCases(a, cfg);
+        for (cases) |case| {
+            var inputs_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+            defer inputs_arena.deinit();
+            const inputs = try makeInputs(inputs_arena.allocator(), cfg, case);
+            try std.testing.expectEqual(inputs.requested, inputs.oracle);
+            if (case.pattern == .rare) {
+                try std.testing.expectEqual(@as(u8, 255), inputs.needle[300]);
+                for (inputs.needle, 0..) |byte, i|
+                    try std.testing.expectEqual(i == 300, byte == 255);
+                for (0..255) |byte|
+                    try std.testing.expect(std.mem.findScalar(
+                        u8,
+                        inputs.needle[0..255],
+                        @intCast(byte),
+                    ) != null);
+                for (inputs.hay, 0..) |byte, i|
+                    try std.testing.expectEqual(
+                        if (inputs.requested) |pos| i == pos + 300 else false,
+                        byte == 255,
+                    );
+            }
+            if (case.pattern == .prefix and case.position == .absent) {
+                for (inputs.hay) |byte| try std.testing.expectEqual(@as(u8, 'a'), byte);
+                for (inputs.needle[0 .. inputs.needle.len - 1]) |byte|
+                    try std.testing.expectEqual(@as(u8, 'a'), byte);
+            }
+            if (case.pattern == .near) {
+                try std.testing.expectEqual(inputs.needle[0], inputs.hay[0]);
+                const last = inputs.needle.len - 1;
+                const midpoint = inputs.needle.len / 2;
+                try std.testing.expectEqual(inputs.needle[last], inputs.hay[last]);
+                try std.testing.expect(inputs.needle[midpoint] != inputs.hay[midpoint]);
+            }
+        }
+    }
+}
+
+test "pointer-return paths share null, empty and invalid-pointer normalization" {
+    const h: [*]const u8 = "abc";
+    try std.testing.expectEqual(@as(usize, 1), normalize(stdWrapper(h, 3, "b", 1), h, 3, 1));
+    try std.testing.expectEqual(@as(usize, 1), normalize(fastmemWrapper(h, 3, "b", 1), h, 3, 1));
+    try std.testing.expectEqual(@as(usize, 0), normalize(stdWrapper(h, 3, "", 0), h, 3, 0));
+    try std.testing.expectEqual(missing, normalize(null, h, 3, 1));
+    try std.testing.expectEqual(missing - 1, normalize(h + 3, h, 3, 1));
 }
