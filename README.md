@@ -54,7 +54,8 @@ Other element types and comptime calls use `std.mem.find`.
 The kernel permits overlapping slices and keeps every read within both slices.
 It needs no allocator and exports no `memmem` symbol.
 
-The [search results](docs/results/find-standard-20261014.md) include the measured aggregate gains and retained slow cases.
+The [search results](docs/results/find-early-standard-20261015.md) include the measured aggregate gains and retained slow cases.
+The [initial port results](docs/results/find-standard-20261014.md) remain available.
 `docs/find-plan.md` defines the contract.
 `THIRD_PARTY.md` records the Rust memchr port and its MIT notice.
 
