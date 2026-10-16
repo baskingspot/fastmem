@@ -108,6 +108,30 @@ its builds dispatch at run time to the level named by `zig_cpu`. All
   `bench watch <run-dir>` (it exits when summary.json exists) and report.
   Its completion wakes the parent. Do not poll in the parent session.
 
+## Local benchmark artifacts
+
+The combined local artifact budget defaults to 4 GiB in `bench.toml`.
+The harness checks this budget before new builds, run commands and fleet launches.
+The check does not monitor growth during an active run.
+It never deletes files or blocks fleet shutdown.
+
+- Own the cleanup of artifacts that you create. Do not delegate retention decisions to Matt.
+- Check local disk use before each experiment and full gate.
+- Remove finished artifacts before new work exceeds the budget.
+- Do not raise the budget without Matt's approval.
+- Keep writable experiment worktrees outside `.bench-cache`.
+- Check each owned worktree for uncommitted changes before removal.
+- Preserve unique source changes in Git.
+- Remove an experiment worktree after its review and integration decision.
+- Use `git worktree remove` for registered checkouts.
+- After review and report commit, remove owned raw run directories.
+- Remove their temporary executables and proof copies at the same time.
+- Keep source revisions and compact result summaries in Git.
+- Do not create an artifact archive unless Matt requests retention.
+- Do not make reports depend on the continued existence of local cache paths.
+- Record the removal of raw evidence when a historical report names those paths.
+- Include artifact cleanup in the completion criteria, not a later housekeeping task.
+
 ## Git
 
 - Never `git add -A` or `git add .`. Stage tracked changes with `git add -u`,

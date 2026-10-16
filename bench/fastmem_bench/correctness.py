@@ -276,6 +276,7 @@ def test_fleet(
     all_modes: bool,
 ) -> None:
     """Run target-CPU and baseline-CPU correctness binaries on each box."""
+    config.check_storage()
     if all_modes:
         optimizes = ("ReleaseFast", "ReleaseSafe", "Debug")
     optimizes = tuple(dict.fromkeys(optimizes))

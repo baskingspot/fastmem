@@ -63,6 +63,7 @@ def source_hash(root: Path) -> str:
 
 
 def resolve(config: Config, revisions: tuple[str, ...], experiment: str = "auto") -> list[Source]:
+    config.check_storage()
     sources = []
     for index, revision in enumerate(revisions):
         if revision == "WORKTREE":
@@ -73,7 +74,8 @@ def resolve(config: Config, revisions: tuple[str, ...], experiment: str = "auto"
             path = config.cache_dir / "src" / sha
             if not path.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
-                git(config.root, "worktree", "add", "--detach", str(path), sha)
+                # A deleted cache can leave a missing checkout registered in Git.
+                git(config.root, "worktree", "add", "--force", "--detach", str(path), sha)
             if git(path, "status", "--porcelain"):
                 raise ValueError(f"Cached source worktree is dirty: {path}")
             digest = sha

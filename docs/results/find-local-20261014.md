@@ -1,7 +1,9 @@
 # Local find candidates, 2026-10-14
 
+> The run owner removed the local raw runs and temporary binaries after acceptance on 2026-10-15.
+> The committed summaries and regression data remain.
+
 These measurements select local experiments. They do not establish fleet acceptance.
-The original fleet reports and raw evidence remain unchanged.
 These local campaigns used no cloud resources.
 A separate [fleet report](find-early-standard-20261015.md) records the later acceptance of the early-packed candidate.
 

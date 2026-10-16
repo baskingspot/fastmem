@@ -1,5 +1,8 @@
 # Subslice search: 2026-10-14
 
+> The run owner removed the local raw runs and temporary binaries after acceptance on 2026-10-15.
+> The committed summaries and regression data remain.
+
 The measured candidate passes the aggregate goal on all seven CPUs and their portable builds.
 This is not a universal speedup: the worst primary case is **18.584237 times slower** than stdlib.
 The initial port retains the regressions below, with explicit limits and follow-up experiments.

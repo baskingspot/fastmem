@@ -1,5 +1,8 @@
 # Subslice search: bounded starts, 2026-10-15
 
+> The run owner removed the local raw runs and temporary binaries after acceptance on 2026-10-15.
+> The committed summaries and regression data remain.
+
 The parent accepts `3656d4593aa7c66373729bcb1e9632384fbf9061` with the explicit regressions below.
 It reduces aggregate latency against the previous fastmem implementation on all fourteen host/build combinations.
 The observed reductions range from 12.198 to 24.262 percent.

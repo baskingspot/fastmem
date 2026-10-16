@@ -283,6 +283,7 @@ def test_fleet(
     seed: int,
 ) -> None:
     """Test search on existing target-CPU and baseline-CPU fleet instances."""
+    config.check_storage()
     optimizes = OPTIMIZES if all_modes else tuple(dict.fromkeys(optimizes))
     fleet = Fleet(config)
     names = config.select(targets)

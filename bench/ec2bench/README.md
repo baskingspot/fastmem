@@ -43,6 +43,7 @@ templates_output = "launch_template_ids"
 ssh_user = "root"
 results_dir = "bench-results"
 cache_dir = ".bench-cache"
+artifact_budget_gib = 4
 
 [fleet]
 default_ttl = "4h"
@@ -64,6 +65,23 @@ The image exposes its version in `/etc/bench-image`.
 
 `up` and `extend` reject TTL values above `fleet.max_ttl`. Its default is 12 hours.
 The default TTL must not exceed this limit.
+
+## Local artifact budget
+
+`project.artifact_budget_gib` defaults to four and must be a positive integer.
+`Config.check_storage()` checks the combined regular-file bytes under the configured cache and results directories.
+The count excludes nested symlink targets and counts each hard-linked file once.
+The check does not create directories or delete files.
+An unreadable directory causes an error rather than a partial count.
+
+Fleet launch and fastmem run commands check the budget before new work.
+Source resolution also checks the budget before builds.
+Shutdown and offline analysis remain available above the budget.
+This preflight check does not enforce a quota during an active run.
+
+Run directories are temporary inputs to analysis and review.
+The run owner removes them after acceptance and a commit of the compact report.
+Raw evidence needs an explicit retention decision, not indefinite storage under a cache directory.
 
 ## Adapter interface
 

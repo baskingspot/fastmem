@@ -88,6 +88,7 @@ def run(  # noqa: C901, PLR0912, PLR0915 — orchestration keeps the experiment 
     x86_experiment: str = "auto",
 ) -> None:
     """Cross-build revisions and measure interleaved rounds across the fleet."""
+    config.check_storage()
     effect = (
         minimum_effect if minimum_effect is not None else config.project.get("minimum_effect", 0.0)
     )

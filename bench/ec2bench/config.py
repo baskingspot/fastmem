@@ -1,11 +1,20 @@
 """Project discovery and generic configuration."""
 
+import os
 import re
+import stat
 import tomllib
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+
+GIB = 1024**3
+
+
+def _walk_error(error: OSError) -> None:
+    if not isinstance(error, FileNotFoundError):
+        raise error
 
 
 def duration(value: str) -> timedelta:
@@ -61,6 +70,33 @@ class Config:
     @property
     def cache_dir(self) -> Path:
         return self.root / self.project.get("cache_dir", ".bench-cache")
+
+    def check_storage(self) -> None:
+        """Reject new work above the local artifact budget. Preserve all files."""
+        gib = self.project.get("artifact_budget_gib", 4)
+        if type(gib) is not int or gib < 1:
+            raise ValueError("project.artifact_budget_gib must be a positive integer")
+        limit = gib * GIB
+        used = 0
+        seen: set[tuple[int, int]] = set()
+        for directory in (self.cache_dir, self.results_dir):
+            for parent, _directories, files in os.walk(directory, onerror=_walk_error):
+                for name in files:
+                    try:
+                        info = (Path(parent) / name).stat(follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    identity = (info.st_dev, info.st_ino)
+                    if not stat.S_ISREG(info.st_mode) or identity in seen:
+                        continue
+                    seen.add(identity)
+                    used += info.st_size
+                    if used > limit:
+                        raise ValueError(
+                            f"Local benchmark artifacts exceed the {gib} GiB budget. "
+                            f"Remove completed artifacts from {self.cache_dir} and "
+                            f"{self.results_dir} before new work."
+                        )
 
     @property
     def tofu_dir(self) -> Path:

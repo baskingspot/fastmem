@@ -11,6 +11,8 @@ templates_output = "launch_template_ids"
 ssh_user = "root"
 results_dir = "bench-results"
 cache_dir = ".bench-cache"
+# Stop new benchmark work above the combined local artifact budget.
+artifact_budget_gib = 4
 # Fractional minimum effect for significance marks.
 minimum_effect = 0.0
 

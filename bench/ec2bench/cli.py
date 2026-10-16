@@ -38,6 +38,7 @@ def ensure_up(
     fleet: Fleet, names: list[str], ttl: str | None = None, size: str | None = None
 ) -> dict[str, Outcome[str]]:
     fleet.config.ttl(ttl or fleet.config.fleet["default_ttl"])
+    fleet.config.check_storage()
     outputs = fleet.outputs()
 
     def launch(name: str) -> str:

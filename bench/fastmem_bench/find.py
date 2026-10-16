@@ -54,6 +54,7 @@ def find(
     Does not launch, reap, terminate, or mutate cloud resources. `bench watch` monitors
     this ordinary ec2bench run directory. Ratios count operations, not searched bytes.
     """
+    config.check_storage()
     try:
         validate_label(label)
     except ValueError as error:
