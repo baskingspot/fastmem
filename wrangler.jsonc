@@ -1,0 +1,19 @@
+{
+  // Schema lives on unpkg because this repo has no node_modules.
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "baskingspot-dev-fastmem",
+  // Set to the date of the last deploy-relevant config change.
+  "compatibility_date": "2026-10-20",
+  // Pure static site: no worker script, so no `main` and no `binding`.
+  "assets": {
+    // The guide under /fastmem/ (see justfile `doc`). The router in
+    // baskingspot/site forwards /fastmem/... without stripping the prefix,
+    // so the Worker sees the paths as built.
+    "directory": "./zig-out/site",
+    // Plain 404 for unknown paths (not an SPA, no 404.html).
+    "not_found_handling": "none",
+    "html_handling": "auto-trailing-slash",
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+}
