@@ -71,7 +71,7 @@ def render(
         {
             "font.family": "DejaVu Sans",
             "font.size": 9,
-            "svg.fonttype": "none",
+            "svg.fonttype": "path",
             "text.color": foreground,
             "axes.edgecolor": rule,
             "axes.labelcolor": muted,
@@ -181,12 +181,6 @@ def render(
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, format="svg", metadata={"Date": None, "Creator": None})
     plt.close(figure)
-    svg = path.read_text(encoding="utf-8")
-    svg = svg.replace(
-        "DejaVu Sans",
-        "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    )
-    path.write_text(svg, encoding="utf-8")
     print(f"wrote {path.relative_to(ROOT)}")
 
 
