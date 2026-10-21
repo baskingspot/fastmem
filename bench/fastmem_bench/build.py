@@ -103,7 +103,7 @@ def expected_dispatch(settings: dict[str, Any], mode: str) -> str | None:
     """The runtime-dispatch level of a G6 x86_64 build: the kernel of zig_cpu.
 
     A baseline x86_64 build without AVX2 selects its kernels at run time
-    (docs/runtime-dispatch.md). On a fleet box the selection must equal the
+    (docs/slop/runtime-dispatch.md). On a fleet box the selection must equal the
     comptime kernel of the target model. Other builds do not dispatch.
     """
     cpu = build_cpu(settings, mode)

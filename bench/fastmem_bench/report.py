@@ -48,7 +48,7 @@ def write(path: Path, summary: dict[str, Any]) -> None:
         "one-sample Hodges-Lehmann ratio of the per-round ratios and the exact Wilcoxon",
         "signed-rank interval (93.75% for 5 rounds: the range of the per-round ratios).",
         "The Level column gives the nominal coverage of each interval under its model",
-        "(docs/bench-design.md).",
+        "(docs/slop/bench-design.md).",
         "Flagged outlier rounds are reported only. They stay in every ratio and interval.",
         "The noise floor is the 95th percentile of |log A/A ratio| in the operation/size group,",
         "pooled across profiles and implementations. Distribution cases use operation/tier groups.",

@@ -1,4 +1,4 @@
-//! The resolver-trap fixture (docs/runtime-dispatch.md). build.zig links it
+//! The resolver-trap fixture (docs/slop/runtime-dispatch.md). build.zig links it
 //! with a fastmem module whose dispatch resolvers execute ud2.
 //! Every path covers lengths through the configured ABI limit.
 //! The program prints "small ok" before its first ABI call above that limit.

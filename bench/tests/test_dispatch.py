@@ -1,4 +1,4 @@
-"""Runtime-dispatch evidence of G6 x86_64 builds (docs/runtime-dispatch.md)."""
+"""Runtime-dispatch evidence of G6 x86_64 builds (docs/slop/runtime-dispatch.md)."""
 
 import json
 from pathlib import Path

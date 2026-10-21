@@ -55,7 +55,7 @@ Thus a hypervisor that masks AVX-512 on a Sapphire Rapids host gets `x86_64_v3`.
 ### Why the dispatcher reads the model
 
 The per-model rows contain the only knobs that can make a kernel slower than the untuned row: REP thresholds and NT thresholds.
-The fleet measured each row on its own model (`docs/results/p3-x86c.md`, `docs/results/p3-x86d.md`).
+The fleet measured each row on its own model (`docs/slop/results/p3-x86c.md`, `docs/slop/results/p3-x86d.md`).
 A dispatched host therefore runs the same kernel as a `-Dcpu=<model>` build.
 An unknown AVX-512 model gets `x86_64_v4`, which has no REP and no NT stores.
 That row cannot select REP on AMD, and it cannot start NT stores below the cache size.
@@ -69,7 +69,7 @@ The NT thresholds describe the fleet instance sizes, as in the comptime builds.
 
 ## Build structure
 
-Zig 0.16 has no per-function target features (`docs/fastmem-plan.md`, Facts).
+Zig 0.16 has no per-function target features (`docs/slop/fastmem-plan.md`, Facts).
 One compilation cannot contain baseline code and AVX2 code.
 Thus `build.zig` compiles each level as a separate object.
 
@@ -282,7 +282,7 @@ The input runs reside in the P7 worktree:
 The first run compares pre-P7 baseline builds with P7 baseline builds.
 Its `v1` binaries contain the P7 kernels.
 The second run contains the comptime `znver5` kernel in `v0`.
-The interpretation follows the layout cautions in `docs/results/small-path-aarch64d.md`.
+The interpretation follows the layout cautions in `docs/slop/results/small-path-aarch64d.md`.
 Instruction counts establish paths, not cycle savings.
 
 ### Zero and byte sizes on all four x86 targets
@@ -379,7 +379,7 @@ An overlap excludes NT stores before the 4K-alias test.
 It also excludes reverse traversal, which overwrites unread source bytes.
 REP remains disabled on AMD.
 The old path is therefore the temporal forward loop, not NT or the backward alias path.
-See `docs/research/x86_64-design.md`, sections 1.4–1.6.
+See `docs/slop/research/x86_64-design.md`, sections 1.4–1.6.
 
 LLVM expands the old four-vector source loop into a 2 KiB iteration.
 The comptime compiler-rt loop at `0x10ac890` uses aligned source loads and a 512-byte iteration.

@@ -129,4 +129,4 @@ Required. If you hit no friction, write "no friction" and stop. Do not manufactu
 
 Accumulated memory. Update it when you find a rule or a recurring drift class the next run should not rediscover. Keep entries short and concrete.
 
-fastmem has four public entry points: `copy`, `move`, `set`, and `exportSymbols`. A performance claim names a results file under `docs/results/`. `docs/results/scorecard.md` is the current state and `docs/results/baseline-0.16.md` measures compiler-rt against glibc. The aarch64 kernels are ports; `THIRD_PARTY.md` is the attribution list.
+fastmem has four public entry points: `copy`, `move`, `set`, and `exportSymbols`. A performance claim names a results file under `docs/slop/results/`. `docs/slop/results/scorecard.md` is the current state and `docs/slop/results/baseline-0.16.md` measures compiler-rt against glibc. The aarch64 kernels are ports; `THIRD_PARTY.md` is the attribution list.

@@ -37,7 +37,7 @@ const x86_move = @import("x86_64/move.zig");
 const x86_set = @import("x86_64/set.zig");
 const on_x86 = x86_tuning.available;
 // x86_64 Linux builds without AVX2 select the x86 kernels at run time
-// (docs/runtime-dispatch.md). AVX2 builds keep the comptime selection.
+// (docs/slop/runtime-dispatch.md). AVX2 builds keep the comptime selection.
 const x86_dispatch = @import("x86_64/dispatch.zig");
 const on_dispatch = x86_dispatch.enabled;
 
@@ -47,9 +47,9 @@ const arm_tuning = @import("aarch64/tuning.zig");
 
 // "+midpair-v2" marks the copy/move mid-block rework: armg's pair
 // shape at 33..64 and V3 fall-through head
-// (docs/results/armg-mid-paths.md), plus the armh 65..128 tail split at
+// (docs/slop/results/armg-mid-paths.md), plus the armh 65..128 tail split at
 // 96 and the V3 copy head's mid96 dispatch
-// (docs/results/armh-graviton-gaps.md). V1 emits no neon mid block, so
+// (docs/slop/results/armh-graviton-gaps.md). V1 emits no neon mid block, so
 // its bytes are unchanged by v2. The set bytes are unchanged on SVE
 // builds, so set keeps the plain name. The V1 hybrid move head checks
 // 128 itself ("+mid128-v1"). The generic set tail follows memset-sve.S
@@ -109,7 +109,7 @@ pub const impl = .{
     .set = set_impl_name,
 };
 
-/// Runtime CPU dispatch (docs/runtime-dispatch.md). It is active in x86_64
+/// Runtime CPU dispatch. It is active in x86_64
 /// Linux builds whose target CPU lacks AVX2, when build.zig links the level
 /// objects. `enabled` is false in every other build, and the functions then
 /// return null or error.Unsupported.
@@ -355,9 +355,6 @@ else if (on_aarch64)
 else
     undefined;
 
-/// Replace the memory symbols in this link with strong, hidden aliases of
-/// the `abi` entries. Call once from the root comptime block. See
-/// docs/export-layer.md.
 /// Export strong, hidden `memcpy`, `memmove`, and `memset` for this link unit.
 /// Call it from the program that owns the final link, never from a library
 /// that another program imports: the definitions would join every consumer's
@@ -378,8 +375,8 @@ pub fn exportSymbols() void {
 /// The entries receive libc names only after exportSymbols. The benchmark
 /// measures these as fastmem_abi. Dedicated kernels handle aarch64 and AVX2.
 /// x86_64 Linux builds without AVX2 get the runtime-dispatch entries: 0 to
-/// 128 bytes inline, larger sizes through the dispatcher
-/// (docs/runtime-dispatch.md). Other targets use generic Zig wrappers.
+/// 128 bytes inline, larger sizes through the dispatcher. Other targets use
+/// generic Zig wrappers.
 pub const abi = struct {
     comptime {
         // A consumer can use only ABI pointers, without copy/move/set.

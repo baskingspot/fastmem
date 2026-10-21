@@ -79,7 +79,7 @@ Baseline G6: c7i: copyFAIL, moveFAIL, setPASS | c8i: copyFAIL, moveFAIL, setPASS
 
 Runs: 20260930T050203Z-x86i-gate2 (default; .text byte-identical to main on
 all 7 targets — the zero-drift rework held), 062445Z chunks, 072023Z
-endpairs, 080840Z mask16. Candidate detail: docs/results/x86i-candidates.md.
+endpairs, 080840Z mask16. Candidate detail: docs/slop/results/x86i-candidates.md.
 
 - x86i_chunks: no win on any targeted tier (c8i copy 65-256 1.149 vs main
   1.112; c7a set 65-256 +2.9%). Rejected.

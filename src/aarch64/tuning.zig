@@ -17,19 +17,19 @@
 //!   pair measures 4.7-5.7 ns under the gap31 profiles at 24..31 (and
 //!   bwd at 16..31) where the NEON pair runs 1.16 ns; the 32 test sits
 //!   after the 2*VL test so 65..128 stays byte-identical to main
-//!   (docs/results/armh-graviton-gaps.md).
+//!   (docs/slop/results/armh-graviton-gaps.md).
 //! - hybrid_ft: the SVE predicated pair for 16..2*VL with the >= 16
 //!   class on the fall-through and the tree out of line (the 1..3 class
 //!   pays the taken branch). A fleet experiment for the V1 move
 //!   96..128 gap to glibc's memmove entry; expected to fail G3 at 1..3
-//!   (docs/results/armh-graviton-gaps.md).
+//!   (docs/slop/results/armh-graviton-gaps.md).
 //!
 //! Move selects its small path independently. Its NEON head transfers exactly
 //! one vector at 16 bytes. The rejected plain NEON pair wrote the same bytes twice.
 //! The previous hybrid head did not duplicate that store.
 //! The candidate improves local V3 calls at 16–32 bytes.
 //! V1 retains the hybrid head after the NEON candidate regressed fleet measurements.
-//! V2/V3 retain the new NEON classes. Evidence appears in docs/results/scorecard.md.
+//! V2/V3 retain the new NEON classes. Evidence appears in docs/slop/results/scorecard.md.
 //!
 //! For set:
 //! - sve:    the AOR memset-sve.S predicated store below 16.
@@ -41,7 +41,7 @@
 //! license); every access in them is sized to the count, so guard-page
 //! tails stay safe.
 //!
-//! Evidence for the per-model defaults: docs/results/aor-g2-graviton.md
+//! Evidence for the per-model defaults: docs/slop/results/aor-g2-graviton.md
 //! (run 20260924T064442Z-aor-g2). Below 16 bytes, compiler-rt's
 //! scalar/NEON small path beats the SVE predicated pair on Neoverse V3
 //! (fastmem_abi/builtin copy 1.50, move 1.40) and ties on V2
@@ -79,12 +79,12 @@ pub const on_neoverse_v3 = builtin.cpu.model == &aarch64_cpu.neoverse_v3;
 // mid entry, which lost to compiler-rt on V2 in that form
 // (copy/aligned/48: 1.15x). V2 set stays sve: 1.000 vs both
 // references at every size.
-// Fleet A/B p3-armc (docs/results/p3-armc.md): hybrid copy on V1/V2
+// Fleet A/B p3-armc (docs/slop/results/p3-armc.md): hybrid copy on V1/V2
 // lost (c8g copy 17-64 B 1.12x glibc, c7g copy 65-256 B 1.06x), so copy
 // keeps the SVE pair there; move and set follow the A/B winners.
 const default_copy_small: CopySmall = if (on_neoverse_v3) .neon else .sve;
 // V1 retains its SVE pair through 2*VL after the NEON regression in
-// bench-results/20260926T085954Z-smallmove (docs/results/scorecard.md).
+// bench-results/20260926T085954Z-smallmove (docs/slop/results/scorecard.md).
 // V2/V3 retain the NEON classes and the exact-16 transfer.
 const default_move_small: CopySmall = if (on_neoverse_v1)
     .hybrid
@@ -123,7 +123,7 @@ pub const move_small: CopySmall = blk: {
 // directly, skipping the head's small-size dispatch. The skipped branches
 // are predicted-taken on every > 64 call; a predicted-taken branch is
 // measurable on Neoverse V2 at benchmark loop scale (the abi trampoline
-// cost 1.283x on c8g set 0-16, docs/results/small-path-aarch64b.md).
+// cost 1.283x on c8g set 0-16, docs/slop/results/small-path-aarch64b.md).
 // Neutral on V3 locally; the fleet decides V1/V2. -Dmid-entry overrides
 // for local runs.
 pub const mid_entry: bool = blk: {

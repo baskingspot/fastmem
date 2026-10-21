@@ -9,7 +9,7 @@ const forward = @import("forward.zig");
 /// kernel applies: x86_64 without AVX2, and architectures other than
 /// x86_64 and aarch64. The table matches the old generic x86_64 and
 /// aarch64 entries. The fallback never calls memcpy, memmove, or memset
-/// through a symbol (docs/fastmem-plan.md).
+/// through a symbol (docs/slop/fastmem-plan.md).
 const Flags = struct {
     tight_loop: bool,
     medium_straight_line: bool,

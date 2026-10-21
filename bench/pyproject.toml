@@ -15,7 +15,13 @@ build-backend = "hatchling.build"
 packages = ["ec2bench", "fastmem_bench"]
 
 [dependency-groups]
-dev = ["pytest>=9", "ruff>=0.15", "ty>=0.0.20", "moto[ec2]>=5"]
+dev = [
+    "pytest>=9",
+    "ruff>=0.15",
+    "ty>=0.0.20",
+    "moto[ec2]>=5",
+    "matplotlib>=3.11.2",
+]
 
 [tool.ruff]
 target-version = "py314"
@@ -31,6 +37,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S106", "PLR2004", "ARG001"]
+"plot_scorecard.py" = ["RUF001", "T201"]
 
 [tool.ty.environment]
 python-version = "3.14"

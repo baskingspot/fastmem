@@ -6,7 +6,7 @@ per-case mappings) on the same box, in interleaved rounds.
 
 A spike is a round median more than SPIKE above the median of all rounds of its
 (case, implementation) cell, pooled across the variants that run one binary. This
-is the definition of docs/bench-design.md, section "Estimator evidence".
+is the definition of docs/slop/bench-design.md, section "Estimator evidence".
 """
 
 import math

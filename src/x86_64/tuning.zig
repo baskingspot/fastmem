@@ -1,4 +1,4 @@
-//! Model-specific defaults from docs/research/x86_64-design.md, section 5.4.
+//! Model-specific defaults from docs/slop/research/x86_64-design.md, section 5.4.
 const std = @import("std");
 const builtin = @import("builtin");
 const options = @import("fastmem_options");
@@ -42,7 +42,7 @@ const defaults: Tuning = if (builtin.cpu.model == &cpu.sapphirerapids) .{
     .copy_source_min = null,
 } else if (builtin.cpu.model == &cpu.znver5) .{
     // Temporal stores win at 16 MiB. NT stores win at 64 MiB.
-    // The composite tests a 32 MiB threshold. See docs/results/p3-x86f.md.
+    // The composite tests a 32 MiB threshold. See docs/slop/results/p3-x86f.md.
     .nt_min = 0x2000000,
     .fwd_source_min = 0xc00001,
     .copy_source_min = 65536,
@@ -78,7 +78,7 @@ pub const selected: Tuning = .{
     .rep_src_align_mask = options.x86_rep_src_align_mask orelse defaults.rep_src_align_mask,
 };
 // Per-model small/medium selections from the p3-x86e fleet A/B
-// (docs/results/p3-x86e.md). `auto` takes the measured winners: medium-entry
+// (docs/slop/results/p3-x86e.md). `auto` takes the measured winners: medium-entry
 // on Granite Rapids, the short-first inline dispatch on Sapphire Rapids. The
 // Zen 4 short classes lost at 17-256 B and stay opt-in.
 const experiment = options.x86_experiment;
@@ -97,7 +97,7 @@ const auto_experiment = switch (experiment) {
     else => false,
 };
 // Fleet candidates retain all unrelated measured selections. auto takes the
-// measured winners (docs/results/p3-x86f.md): pairs on GNR, chunks on Intel,
+// measured winners (docs/slop/results/p3-x86f.md): pairs on GNR, chunks on Intel,
 // source+64KiB on Zen 5, temporal below 32 MiB on Zen 5.
 // Fleet: x86g-temporal-256 (2026-09-28): c8a set 32 MiB 1.11 -> 0.99.
 pub const temporal_set_256 = builtin.cpu.model == &cpu.znver5 and
@@ -127,7 +127,7 @@ pub const vec = selected.vec;
 pub const inline_max = options.x86_inline_max orelse 4 * vec;
 // Model gates also apply to explicit experiments. Other CPUs retain their defaults.
 // Keep the resolver in build.zig consistent with this table.
-// p3-x86d fleet A/B (docs/results/p3-x86d.md): straight_1k on SPR and GNR.
+// p3-x86d fleet A/B (docs/slop/results/p3-x86d.md): straight_1k on SPR and GNR.
 const intel_model = builtin.cpu.model == &cpu.graniterapids or
     builtin.cpu.model == &cpu.sapphirerapids;
 const model_variant = if (builtin.cpu.model == &cpu.znver4)

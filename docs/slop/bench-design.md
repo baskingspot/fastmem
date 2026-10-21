@@ -307,7 +307,7 @@ bench run [--rev REV]... [--target T]... [--suite quick|standard|large|const|dis
   `cpu_mode` and the CPU of each target (`cpus`). Analysis rejects a raw
   file whose `meta.cpu` differs from that CPU.
 - An x86_64 `--cpu baseline` build selects its kernels at run time
-  (`docs/runtime-dispatch.md`). The manifest records the expected level of
+  (`docs/slop/runtime-dispatch.md`). The manifest records the expected level of
   each target in `dispatch_levels`: the `zig_cpu` of the target. Analysis
   rejects a raw file whose `meta.dispatch.level` differs from it.
 - The dispatch capability of a binary is its codegen evidence: a
@@ -874,7 +874,7 @@ Meta fields:
 | `perf` | Object with `available`, `events`, and `error` |
 | `dispatch` | The runtime-dispatch object. Only a binary that dispatches at run time emits it. |
 
-The `dispatch` object has these fields (`docs/runtime-dispatch.md`):
+The `dispatch` object has these fields (`docs/slop/runtime-dispatch.md`):
 
 | Field | Type and meaning |
 |---|---|
@@ -1002,7 +1002,7 @@ The reason field names the CPU mode in both cases.
 The goal implementation is `bench/fastmem_bench/goals.py`.
 The goal tests are `bench/tests/test_v2.py`.
 The coverage regressions are `bench/tests/test_coverage.py`.
-The thresholds come from G2 through G4 in `docs/fastmem-plan.md`.
+The thresholds come from G2 through G4 in `docs/slop/fastmem-plan.md`.
 
 ### Delegation evidence
 
@@ -1060,7 +1060,7 @@ The manifest retains the probe evidence.
 The harness saves on-box disassembly for all three glibc functions beside the target artifacts.
 These artifacts remain under gitignored result directories.
 They never enter this MIT repository.
-The clean-room rule is in `docs/fastmem-plan.md`.
+The clean-room rule is in `docs/slop/fastmem-plan.md`.
 
 ## Correctness tests (G1)
 
@@ -1146,7 +1146,7 @@ Canaries detect writes into accessible padding, but cannot detect reads into tha
 
 The default ceiling depends on the comptime CPU model.
 Each x86 ceiling exceeds the largest active NT threshold and uses a whole MiB.
-The threshold evidence is in `docs/research/hosts/README.md` and `src/x86_64/tuning.zig`.
+The threshold evidence is in `docs/slop/research/hosts/README.md` and `src/x86_64/tuning.zig`.
 Zen 5 uses 33 MiB to cover its 32 MiB copy and fill thresholds.
 
 | CPU family | Ceiling |
@@ -1174,7 +1174,7 @@ The summary contains:
 - `schema: 2`, `matrix: "g1-v2"`, and `status: "pass"` or `"fail"`.
 - `cases`, per-entry `path_cases`, `elapsed_ns`, `cpu`, `max_size`, `optimize`, and `link_libc`.
 - `set_available` and the three `impl` identifiers.
-- `dispatch`: the runtime-dispatch `level` and `kernel` of an x86_64 build without AVX2, or null (`docs/runtime-dispatch.md`).
+- `dispatch`: the runtime-dispatch `level` and `kernel` of an x86_64 build without AVX2, or null (`docs/slop/runtime-dispatch.md`).
   `fastmem-tests` links a private copy of the public module with the test hooks (`--x86-level`).
 - `detail` and the last case's operation, path, source order, length, offsets, gap, side, and value.
 - `fault_address`, `fault_region`, and `fault_access`, which are null outside a signal failure.

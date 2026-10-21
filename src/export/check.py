@@ -88,7 +88,7 @@ def main():
     if not args.disabled:
         # The x86_64 dispatch stubs jump through pointers, which the audit
         # does not follow. Its level kernels, resolvers, and generic entries
-        # are roots too (docs/runtime-dispatch.md).
+        # are roots too (docs/slop/runtime-dispatch.md).
         roots = {
             value[0]
             for name, value in symbols.items()

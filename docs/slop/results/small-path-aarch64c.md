@@ -94,7 +94,7 @@ the fleet with it.
 ## Diagnosis 2: the SVE small paths mispredict V1 (c7g)
 
 glibc selects `__memcpy_sve` / `__memmove_sve` / `__memset_sve_zva64`
-on all three Gravitons (`docs/research/hosts/README.md`), and the
+on all three Gravitons (`docs/slop/research/hosts/README.md`), and the
 fastmem bodies are instruction-identical to them below 16 B. c7g
 (Neoverse V1, 256-bit SVE) still fails G3 per case against
 compiler-rt, all significant:

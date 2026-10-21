@@ -1,4 +1,4 @@
-//! Measurement binary, schema v3. See docs/bench-design.md.
+//! Measurement binary, schema v3. See docs/slop/bench-design.md.
 //! All timings use independent code. No external memory implementation is copied here.
 
 const std = @import("std");
@@ -1235,7 +1235,7 @@ const DispatchMeta = struct {
 };
 
 /// The runtime-dispatch level of a baseline x86_64 build
-/// (docs/runtime-dispatch.md). The timed calls resolved it before the meta
+/// (docs/slop/runtime-dispatch.md). The timed calls resolved it before the meta
 /// record.
 fn dispatchMeta() DispatchMeta {
     const info = fastmem.dispatch.detect().?;

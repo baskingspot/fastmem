@@ -1,4 +1,4 @@
-"""Check the x86_64 runtime dispatch of a baseline build (docs/runtime-dispatch.md).
+"""Check the x86_64 runtime dispatch of a baseline build (docs/slop/runtime-dispatch.md).
 
 Arguments: the symbol prefix (fastmem_x86_<instance>_), the baseline codegen
 probe object, the ABI small limit, then one triple per level:
@@ -323,7 +323,7 @@ def normalized(obj, level, entry):
 
 LEVELS = []
 PREFIX = ""
-# REP and NT use per level (src/x86_64/tuning.zig and src/x86_64/README.md).
+# REP and NT use per level (src/x86_64/tuning.zig and docs/slop/x86_64.md).
 _INTEL = {"move": {"rep": True, "nt": True}, "set": {"rep": True, "nt": True}}
 _AMD = {"move": {"rep": False, "nt": True}, "set": {"rep": False, "nt": False}}
 _NONE = {"move": {"rep": False, "nt": False}, "set": {"rep": False, "nt": False}}

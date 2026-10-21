@@ -6,7 +6,7 @@ fixed). Author: Opus 5.5 (research lane P1b), 2026-09-23.
 This memo is research. It describes behavior and proposes a design. It
 contains no glibc code. Disassembly addresses refer to
 `.bench-cache/glibc/libc-x86_64-linux-gnu.so.6` (glibc 2.40, NixOS
-25.11 AMI build). Host facts refer to `docs/research/hosts/<target>/`.
+25.11 AMI build). Host facts refer to `docs/slop/research/hosts/<target>/`.
 
 Sections 1-3 describe glibc, llvm-libc and compiler-rt. Section 4
 proves what Zig 0.16 can express. Section 5 is the design. Section 6
@@ -18,7 +18,7 @@ risks.
 | Tag | Source |
 |---|---|
 | `so:0x…` | address in `.bench-cache/glibc/libc-x86_64-linux-gnu.so.6`, disassembled with `nix develop -c llvm-objdump -d --no-show-raw-insn --start-address=… --stop-address=…` |
-| `hosts/<t>/<file>:<line>` | `docs/research/hosts/<t>/` host facts (P0) |
+| `hosts/<t>/<file>:<line>` | `docs/slop/research/hosts/<t>/` host facts (P0) |
 | `glibc-src <file>:<line>` | glibc `release/2.40/master`, commit `cdaa5d6db08ee6d7cdcb008ae83b6fe7856291c4`, fetched from sourceware gitweb on 2026-09-23. Read for behavior only. The branch head is newer than the NixOS `glibc-2.40-224` build on the hosts, so the host facts win where they differ. |
 | `llvm-libc <file>:<line>` | `llvm/llvm-project` commit `b19a36aaf4b9aaea539b903bd515b54a9f23a639` (main, 2026-09-24T02:13Z), path `libc/src/string/…` |
 | `zig-lib <file>:<line>` | `/nix/store/h4am1dpj4li41cq58861nysgaip7036s-zig-0.16.0/lib/zig/…` |
@@ -226,7 +226,7 @@ Effective `rep movsb` window per host (1.2):
 | c7a | never (non-erms entry) |
 | c8a | never: n > 12 MiB is required, and n ≥ 12 MiB goes to NT first |
 
-In the standard suite (sizes up to 1 MiB, `docs/bench-design.md`,
+In the standard suite (sizes up to 1 MiB, `docs/slop/bench-design.md`,
 "Cases"), glibc uses `rep movsb` on Intel for 65536, 262144 and 1048576,
 and for no size on AMD. 16384 stays on the vector loop (the compare is
 "above").
@@ -474,7 +474,7 @@ No llvm-libc memcpy, memmove or memset uses AVX-512 masking.
 ### 2.5 What is portable to fastmem
 
 Apache-2.0 WITH LLVM-exception is a permitted source
-(`docs/fastmem-plan.md`, "Licensing"). A port keeps the upstream
+(`docs/slop/fastmem-plan.md`, "Licensing"). A port keeps the upstream
 notice, names the file and commit, and gets a `THIRD_PARTY.md` entry.
 
 | Part | Port? | Why |
@@ -562,7 +562,7 @@ x86_64_v3 binaries use only `ymm`.
 3. **No `rep movsb` on Intel.** glibc switches to `rep movsb` above
    16 KiB on c7i and c8i (1.5). `AGENTS.md` records that `rep movsb` is
    the floor for large aligned copies on x86 with ERMS/FSRM (0.15-era
-   evidence, `docs/results/zig-0.15-benchmark-hosts.md`).
+   evidence, `docs/slop/results/zig-0.15-benchmark-hosts.md`).
 4. **Source-aligned loop.** Stores are unaligned. With a misaligned
    destination, every 64-byte store (znver4) splits two cache lines.
    glibc aligns the destination (1.4).
@@ -1062,7 +1062,7 @@ with builtins **on**):
 
 G4 requires that `fastmem.copy` with a comptime-known size up to 256
 "generates no call and is not slower than `@memcpy` with the same
-comptime size" (`docs/fastmem-plan.md`, G4). This experiment checks the
+comptime size" (`docs/slop/fastmem-plan.md`, G4). This experiment checks the
 first half and a static proxy for the second half, for every size
 1-256, on all four `-mcpu` values. The timing half is gate G4F in
 section 6. It needs hardware and the harness.
@@ -1440,7 +1440,7 @@ Decision:
 ## 6. Hypotheses for P3, ranked
 
 Ranking: the expected effect on G1-G6, times the uncertainty. Every
-command runs the harness (`docs/bench-design.md`, "bench run"). The
+command runs the harness (`docs/slop/bench-design.md`, "bench run"). The
 harness builds each revision with fixed flags and has no pass-through
 for `-D` options. A threshold sweep is therefore a set of revisions:
 one commit for each value, on branches `p3/<hyp>-<value>`. The impl
@@ -1480,7 +1480,7 @@ H4-H8 tune it. H9-H14 can wait until G2 holds.
 1. **Harness interface.** Section 6 assumes the P1a schema v2: impl names
    `builtin`, `glibc`, `fastmem_abi`, `fastmem_inline`, a memset op
    named `set`, and filters of the form `<op>/<profile>/`. It also needs
-   three things that `docs/bench-design.md` does not define yet:
+   three things that `docs/slop/bench-design.md` does not define yet:
    a `large` suite (16 MiB, 64 MiB, 256 MiB, for the NT paths, H13/H14),
    a command form for the x86_64_v3 baseline build (H12), a `fixed`
    suite with a constant-size `@memcpy` impl and a constant-length slice

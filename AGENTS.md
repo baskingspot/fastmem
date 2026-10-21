@@ -2,9 +2,15 @@
 
 fastmem gives Zig a `memcpy`, `memmove`, and `memset` that are equal to or
 faster than glibc and compiler-rt. `README.md` is the user overview.
-`docs/fastmem-plan.md` is the plan: mission, goals G1-G6, the clean-room
+`docs/slop/fastmem-plan.md` is the plan: mission, goals G1-G6, the clean-room
 rule, and the facts that the design depends on. Read it before you change
 a kernel or make a performance claim.
+
+## Docs
+
+Docs are for human readers unless they live in `docs/slop/`. The README, the
+guide, `CHANGELOG.md`, and `THIRD_PARTY.md` are human-facing and must not link
+`docs/slop/`. This file and code comments may.
 
 ## Layout
 
@@ -13,9 +19,10 @@ a kernel or make a performance claim.
   per op), and `exportSymbols()`. It selects a kernel per target.
 - `src/x86_64/`: the x86_64 kernels (AVX-512 and AVX2). `tuning.zig` holds
   the per-model table and `-Dx86-variant=auto` resolution.
-  `check_codegen.py` is the codegen gate. `README.md` describes the design.
+  `check_codegen.py` is the codegen gate. `docs/slop/x86_64.md` describes
+  the design.
   `dispatch.zig`, `cpuid.zig`, and `level.zig` are the runtime dispatch of
-  builds without AVX2 (`docs/runtime-dispatch.md`). `check_dispatch.py`
+  builds without AVX2 (`docs/slop/runtime-dispatch.md`). `check_dispatch.py`
   and `run_dispatch.py` are its gate (`zig build test-dispatch`).
 - `src/aarch64/`: ports of Arm Optimized Routines (SVE and AdvSIMD) as
   global asm, plus `small.zig` (the inline small classes) and `tuning.zig`
@@ -32,15 +39,19 @@ a kernel or make a performance claim.
 - `src/asm_probe.zig`: C-ABI wrappers for `zig build asm`.
 - `bench/`: the Python (uv) harness. `ec2bench/` is the generic fleet
   library. `fastmem_bench/` builds, runs, and analyzes. `bench.toml`
-  configures both.
+  configures both. `plot_scorecard.py` renders the guide's benchmark chart;
+  `just plot` regenerates it.
 - `infra/`: OpenTofu. `modules/bench-iam` and `modules/bench-base`, root
   stacks `iam/` (a human applies it) and `base/` (the agent applies it).
   `infra/README.md` is the runbook.
-- `docs/`: `fastmem-plan.md`, `bench-design.md` (the benchmark contract),
-  `export-layer.md`, `runtime-dispatch.md`, `research/` (design memos, host
-  facts), `results/` (one file per fleet measurement). `docs/content/` is the
-  site guide, `docs/static/` holds the marks, and `wrangler.jsonc` deploys it
-  as `baskingspot-dev-fastmem`.
+- `docs/content/`: the site guide. `docs/static/`: the marks and the
+  benchmark chart. `wrangler.jsonc` deploys the site as
+  `baskingspot-dev-fastmem`.
+- `docs/slop/`: the agent-facing design and research. `fastmem-plan.md`,
+  `bench-design.md` (the benchmark contract), `export-layer.md`,
+  `runtime-dispatch.md`, `research/` (design memos, host facts), and
+  `results/` (one file per fleet measurement, including the scorecard the
+  plot reads). Do not link these from the README or the guide.
 
 ## Toolchain
 
@@ -60,6 +71,7 @@ a kernel or make a performance claim.
 - `just ci`: everything the main CI job runs, including `bench-check` and
   `test-infra`. `just test-guard` is the separate guard-page lane.
 - `just doc`: build the site into `zig-out/site/fastmem/`.
+- `just plot`: regenerate `docs/static/benchmark.svg` from the scorecard.
 - `just test-guard`: the guard-page matrix on this host.
 - `just codegen-x86`: the x86 codegen gate for every fleet CPU model.
 - `just bench-up`.
@@ -98,7 +110,7 @@ its builds dispatch at run time to the level named by `zig_cpu`. All
 - The inline layer contains no loops. Loops go in non-inline functions of
   the `no_builtin` module.
 - A performance claim names its run directory and a results file in
-  `docs/results/`. A change that helps one target and hurts another needs a
+  `docs/slop/results/`. A change that helps one target and hurts another needs a
   comptime per-model selection.
 - A kernel change that changes aarch64 bytes updates GOLDEN in
   `src/export/check_kernel_bytes.py` in the same commit, on purpose.

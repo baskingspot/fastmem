@@ -1,7 +1,7 @@
 # Third-party code
 
 fastmem is MIT (`LICENSE`). This file lists every file that is a port of
-upstream code, per the licensing rules in `docs/fastmem-plan.md`.
+upstream code, under the repository's clean-room rules.
 
 ## Arm Optimized Routines
 
@@ -61,9 +61,9 @@ the notice from the upstream `LICENSE` file is reproduced here:
 
 ## x86_64 kernels
 
-Except for `compact.zig`, the x86 kernels independently implement `docs/research/x86_64-design.md`, section 5.
-No glibc source or disassembly entered these files.
-The memo uses glibc only as a behavioral reference.
+Except for `compact.zig`, the x86 kernels are independent implementations.
+No glibc source or disassembly entered these files. glibc was only a behavioral
+reference.
 
 The head/tail vocabulary also follows llvm-libc's design in `libc/src/string/memory_utils/op_generic.h`.
 That reference uses commit `b19a36aaf4b9aaea539b903bd515b54a9f23a639` and the Apache-2.0 WITH LLVM-exception license.

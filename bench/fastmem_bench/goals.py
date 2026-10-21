@@ -1,4 +1,4 @@
-"""Timing components of G2-G4 and G6 from docs/fastmem-plan.md.
+"""Timing components of G2-G4 and G6 from docs/slop/fastmem-plan.md.
 
 Incomplete suites never pass. G4 code generation belongs to the P4 binary test.
 G2-G4 apply to builds with the bench.toml zig_cpu. G6 applies to baseline builds.

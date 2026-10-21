@@ -4,7 +4,7 @@
 
 The default remains `high_regs`. Neither candidate has fleet measurements.
 The parent and a cross-family reviewer decide acceptance.
-The baseline evidence is `bench-results/20260924T101602Z-p3-x86b`, summarized in `docs/results/small-path-ab.md`.
+The baseline evidence is `bench-results/20260924T101602Z-p3-x86b`, summarized in `docs/slop/results/small-path-ab.md`.
 
 The implementation commits are `f47d58a` and `717eddb`.
 The first commit fixes the codegen gate. The second adds two optional candidates.
@@ -148,7 +148,7 @@ The upstream file matches the pinned Nix toolchain byte-for-byte.
 The full local guard matrix ran once. The focused page-edge test ran twice, including the final import-only cleanup.
 No AWS command or fleet launch ran in this lane.
 Local evidence does not cover AVX-512 execution. The parent must run the hardware guards.
-The saved local summaries are in `docs/results/p3-x86c-local.json`.
+The saved local summaries are in `docs/slop/results/p3-x86c-local.json`.
 
 The gate now requires the requested variant as an argument.
 It rejects the wrong register bank or branch fingerprint. It does not infer the variant from the object.

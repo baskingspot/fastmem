@@ -84,6 +84,11 @@ api:
 doc-deploy: doc
     wrangler deploy
 
+[doc("Regenerate docs/static/benchmark.svg from the scorecard (uses the bench dev environment)")]
+[group("bench")]
+plot:
+    uv run --project bench python bench/plot_scorecard.py
+
 [doc("Run the measurement binary on this host (e.g. just bench --suite quick --filter copy/aligned)")]
 [group("bench")]
 bench *ARGS:

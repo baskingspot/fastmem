@@ -8,7 +8,7 @@
 
 Each definition has the address of the corresponding `fastmem.abi` entry.
 The export adds no wrapper or trampoline.
-In an x86_64 dispatch build, the `fastmem.abi` entries handle 0 to 128 bytes themselves and dispatch larger sizes (`docs/runtime-dispatch.md`).
+In an x86_64 dispatch build, the `fastmem.abi` entries handle 0 to 128 bytes themselves and dispatch larger sizes (`docs/slop/runtime-dispatch.md`).
 An import alone does not replace these symbols.
 
 ## Enable the exports
@@ -85,7 +85,7 @@ The binary suite tests Linux with Zig 0.16.0.
 Other object formats and non-LLVM backends receive a compile error.
 
 The target CPU selects the kernel at compile time, with one exception.
-An x86_64 Linux build without AVX2 selects its kernels at run time (`docs/runtime-dispatch.md`).
+An x86_64 Linux build without AVX2 selects its kernels at run time (`docs/slop/runtime-dispatch.md`).
 There the exported symbols handle 0 to 128 bytes inline. Larger sizes make a pointer load and an indirect jump.
 The executable must run on a CPU that supports its target features.
 

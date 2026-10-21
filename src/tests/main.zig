@@ -95,7 +95,7 @@ fn summary(status: []const u8, detail: []const u8, elapsed_ns: i96) void {
     _ = linux.write(1, line.ptr, line.len);
 }
 
-/// The runtime-dispatch level and kernel (docs/runtime-dispatch.md), or
+/// The runtime-dispatch level and kernel (docs/slop/runtime-dispatch.md), or
 /// null in a comptime-selected build.
 fn dispatchSummary() ?struct { level: []const u8, kernel: []const u8 } {
     const level = fastmem.dispatch.level() orelse return null;

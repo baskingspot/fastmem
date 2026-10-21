@@ -48,6 +48,9 @@
                 # objects: llvm-objdump reads x86_64 and aarch64 alike.
                 llvmPackages.bintools-unwrapped
                 shellcheck
+                # numpy and matplotlib ship manylinux wheels; their C++ runtime
+                # is not in the nix Python.
+                stdenv.cc.cc.lib
               ]
               # User-mode qemu runs cross-built x86 test binaries on the arm
               # dev host (AVX2 only: it lacks AVX-512). Linux only.
@@ -57,6 +60,7 @@
             env = {
               UV_PYTHON = "${pkgs.python314}/bin/python3";
               UV_PYTHON_DOWNLOADS = "never";
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
             };
           };
         };

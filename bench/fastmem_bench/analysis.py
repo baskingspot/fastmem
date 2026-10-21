@@ -6,7 +6,7 @@ samples. A ratio compares the round medians of two cells on the log scale.
 Cells of two variants come from separate processes: a two-sample comparison.
 Cells of one variant come from the same processes: a paired comparison.
 Outlier rounds are reported only. They never leave an estimate or interval.
-The design and its evidence are in docs/bench-design.md, section "Analysis".
+The design and its evidence are in docs/slop/bench-design.md, section "Analysis".
 """
 
 import logging
@@ -259,7 +259,7 @@ def record_dispatch(
 ) -> None:
     """Keep the runtime-dispatch capability and record of each variant.
 
-    The capability comes from the binary (docs/runtime-dispatch.md): a
+    The capability comes from the binary (docs/slop/runtime-dispatch.md): a
     dispatching binary exports its resolvers, and the codegen evidence in
     the meta record names them. Such a binary must emit the `dispatch`
     object, with the expected level. Any other binary must not emit it.

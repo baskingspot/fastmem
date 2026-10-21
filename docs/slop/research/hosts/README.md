@@ -6,7 +6,7 @@ The harness collected them with `libc-probe` and `ld.so --list-diagnostics`.
 This directory holds facts only. The glibc binaries and their disassembly
 are LGPL material. They are in `.bench-cache/glibc/` (gitignored), so that
 they never enter this MIT repository. Read them to learn behavior. Do not
-copy code from them. `docs/fastmem-plan.md` has the clean-room rule.
+copy code from them. `docs/slop/fastmem-plan.md` has the clean-room rule.
 
 | Target | CPU | memcpy / memmove variant | memset variant |
 |---|---|---|---|

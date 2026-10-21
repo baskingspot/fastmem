@@ -1,7 +1,7 @@
 # x86 small ABI entry: P3-x86b
 
 Status: local checks pass except the pending full Debug guard run under qemu. Hardware correctness and performance remain acceptance gates.
-The baseline is `36c960f`. The fleet evidence that motivates this change is `docs/results/x86-g2-v1.md`.
+The baseline is `36c960f`. The fleet evidence that motivates this change is `docs/slop/results/x86-g2-v1.md`.
 
 ## Entry diagnosis
 

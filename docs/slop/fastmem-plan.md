@@ -46,7 +46,7 @@ strong kernel, and parity is the goal.
   In ReleaseFast, every `@memcpy` call binds to it. The P6 Debug probes
   show runtime copy and move calls on both self-hosted backends. Fill
   uses inline `rep stosb` on x86_64 and a call on aarch64.
-  See `docs/export-layer.md` for the backend limits and binary tests.
+  See `docs/slop/export-layer.md` for the backend limits and binary tests.
 - LLVM can turn the loop in a `memcpy` implementation into a call to
   `memcpy`: that is infinite recursion. The fastmem module must build with
   `no_builtin = true`. With `-fno-builtin` on the calling module, `@memcpy`
@@ -55,7 +55,7 @@ strong kernel, and parity is the goal.
   libraries. The x86_64 Debug backend exported it even with hidden
   visibility.
 - glibc selections and thresholds for each target:
-  `docs/research/hosts/README.md`.
+  `docs/slop/research/hosts/README.md`.
 - `@disableIntrinsics()` is a per-function `no_builtin`. Inside an
   `inline fn` it applies to the whole caller. An `inline fn` body takes
   the builtin setting of its caller, so a loop in an inline function of a
@@ -155,7 +155,7 @@ G4. The inline advantage.
   perf-event counts, and the kernels are at parity with glibc above 64 B,
   so what remains is the fixed cost of the inline path on those parts.
   Matt approved the per-arch split (0.90 x86, 0.95 Graviton). Evidence:
-  `docs/results/scorecard.md` (runs 20260927T162241Z and 171003Z).
+  `docs/slop/results/scorecard.md` (runs 20260927T162241Z and 171003Z).
 
 G5. The export layer.
 - With `fastmem.exportSymbols()`, ReleaseFast `@memcpy`, `@memmove`, and
@@ -179,7 +179,7 @@ configuration that handoff ships.
 - Kernel selection is comptime, from the build target CPU features. The
   exception is an x86_64 Linux build without AVX2: it selects its kernels
   at run time, from CPUID once, through one function pointer per operation
-  (`docs/runtime-dispatch.md`). It is on by default. `-Dx86-dispatch=false`
+  (`docs/slop/runtime-dispatch.md`). It is on by default. `-Dx86-dispatch=false`
   turns it off.
 - Kernels are organized by size class. The small classes use overlapping
   head and tail loads with branches. Mid sizes use a vector loop. Large
@@ -205,24 +205,24 @@ The measurement binary compares four implementations for each operation:
 
 The binary proves the glibc resolution: the `dladdr` library path must be
 the libc of the box. Otherwise the binary refuses to run. The contract is
-in `docs/bench-design.md`.
+in `docs/slop/bench-design.md`.
 
 ## Phases
 
 | Phase | Work | Owner | Exit |
 |---|---|---|---|
-| P0 | Ground truth: glibc variants and thresholds per target | parent | done: `docs/research/hosts/` |
+| P0 | Ground truth: glibc variants and thresholds per target | parent | done: `docs/slop/research/hosts/` |
 | P1a | Measurement binary v2 (four impls, memset, verified glibc, fixed perf counters, calibration) and harness schema v2 | GPT-6 Astra (writer), Opus review | a 7-target baseline run |
 | P1b | x86_64 design memo | Opus 5.5 (research) | reviewed memo |
 | P1c | aarch64 design memo | Kimi K3 (research) | reviewed memo |
-| P1d | Baseline: compiler-rt vs glibc on 7 targets | parent | `docs/results/baseline-0.16.md` |
+| P1d | Baseline: compiler-rt vs glibc on 7 targets | parent | `docs/slop/results/baseline-0.16.md` |
 | P1e | Size distributions of real Zig programs (uprobe on compiler-rt memcpy) | parent | `dist/zig-*` suites |
 | P2 | Correctness framework: guard-page tests, fuzz, `bench test` runs test binaries on every box | Astra | G1 harness |
 | P3 | memmove/memcpy kernels. aarch64: first a port of AOR `memcpy-sve.S` as global asm (the G2 baseline), then pure-Zig challengers (K3 writes, Opus reviews). x86_64: Zig vector kernels with asm fragments per the memo (Astra writes, Opus reviews). Iterate with the harness against G2/G3 | lanes, parent gates | G1-G3 for copy and move |
 | P4 | Inline layer | Opus design, K3 or Astra writes | G4 |
 | P5 | memset, same method | lanes | G1-G4 for set |
 | P6 | Export layer and ecosystem validation | Astra writes, Opus reviews | G5 |
-| P7 | Runtime dispatch: a baseline x86_64 build selects the AVX2 or AVX-512 kernels on hosts that have them (issue #1). Design and local evidence: `docs/runtime-dispatch.md` | lanes | G6 on the fleet |
+| P7 | Runtime dispatch: a baseline x86_64 build selects the AVX2 or AVX-512 kernels on hosts that have them (issue #1). Design and local evidence: `docs/slop/runtime-dispatch.md` | lanes | G6 on the fleet |
 
 ## Working rules for lanes
 

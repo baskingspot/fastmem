@@ -91,7 +91,7 @@ class Codegen(Record):
 
 
 class Dispatch(Record):
-    """The runtime-dispatch level of a baseline x86_64 build (docs/runtime-dispatch.md)."""
+    """The runtime-dispatch level of a baseline x86_64 build (docs/slop/runtime-dispatch.md)."""
 
     level: Literal[
         "generic", "x86_64_v3", "x86_64_v4", "sapphirerapids", "graniterapids", "znver4", "znver5"
@@ -165,7 +165,7 @@ class Meta(Record):
     resolution: dict[str, Resolution]
     codegen: Codegen | None
     memory: Memory | None = None
-    # Present only in a binary that dispatches at run time (docs/runtime-dispatch.md).
+    # Present only in a binary that dispatches at run time (docs/slop/runtime-dispatch.md).
     dispatch: Dispatch | None = None
 
     @field_validator("schema_version", mode="before")

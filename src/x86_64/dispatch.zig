@@ -1,5 +1,5 @@
 //! Runtime CPU dispatch for x86_64 builds whose target CPU lacks AVX2
-//! (docs/runtime-dispatch.md). The kernels of each level come from a
+//! (docs/slop/runtime-dispatch.md). The kernels of each level come from a
 //! separate object that build.zig compiles for a fixed CPU. This module
 //! reads CPUID and XCR0 once, on the first call, and sets one function
 //! pointer per operation.

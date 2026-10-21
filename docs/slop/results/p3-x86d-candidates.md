@@ -27,7 +27,7 @@ The corresponding implementation names contain the selected variant, such as `x8
 
 The input run is `bench-results/20260924T201905Z-p3-x86c/`, compact revision `4d59aeb`, five rounds.
 Its raw directory lives in the P3-x86c worktree.
-`docs/results/p3-x86d-input-rows.json` preserves the relevant rows, confidence intervals, and outlier flags.
+`docs/slop/results/p3-x86d-input-rows.json` preserves the relevant rows, confidence intervals, and outlier flags.
 No outlier was removed. The paired confidence level is 93.75%.
 The tables below report point estimates, not acceptance verdicts.
 
@@ -170,7 +170,7 @@ All overlapping moves remain safe because every source load precedes every desti
 
 ## Local checks
 
-`docs/results/p3-x86d-local.json` records the commands and results.
+`docs/slop/results/p3-x86d-local.json` records the commands and results.
 
 | Check | Result |
 |---|---|

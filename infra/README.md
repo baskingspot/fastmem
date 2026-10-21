@@ -2,7 +2,7 @@
 
 This directory holds the durable AWS resources and the box image of the
 benchmark fleet. The harness in `bench/` launches and terminates the
-instances through the EC2 API. `docs/bench-design.md` is the contract.
+instances through the EC2 API.
 
 ## Layout
 

@@ -1,6 +1,6 @@
 //! libc-probe: report how this build resolves the libc memory functions.
 //!
-//! Prints one JSON object on stdout (see docs/bench-design.md):
+//! Prints one JSON object on stdout (see docs/slop/bench-design.md):
 //!
 //! {"libc_path":"...","glibc_version":"...",
 //!  "symbols":{"memcpy":{"address":"0x..","symbol":".."|null,"offset":"0x.."},

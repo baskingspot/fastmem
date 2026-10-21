@@ -1,5 +1,5 @@
 //! The root of one kernel object of the x86_64 runtime dispatch
-//! (docs/runtime-dispatch.md). build.zig compiles this file once per
+//! (docs/slop/runtime-dispatch.md). build.zig compiles this file once per
 //! level, with -Dcpu set to the level name. The object contains the same
 //! kernels as a comptime build for that CPU, under hidden symbol names
 //! that contain the package instance id and the level name.

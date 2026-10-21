@@ -29,7 +29,7 @@ const X86Variant = enum {
 };
 
 // The per-model default of the "auto" variant, from the p3-x86c fleet A/B
-// (docs/results/p3-x86c.md). Keep in sync with src/x86_64/tuning.zig.
+// (docs/slop/results/p3-x86c.md). Keep in sync with src/x86_64/tuning.zig.
 fn resolveX86Variant(cpu: []const u8, variant: X86Variant) X86Variant {
     const granite = std.mem.eql(u8, cpu, "graniterapids");
     const intel = granite or std.mem.eql(u8, cpu, "sapphirerapids");
@@ -39,13 +39,13 @@ fn resolveX86Variant(cpu: []const u8, variant: X86Variant) X86Variant {
         .auto => {},
         else => return variant,
     }
-    // p3-x86d fleet A/B (docs/results/p3-x86d.md): straight_1k on Intel.
+    // p3-x86d fleet A/B (docs/slop/results/p3-x86d.md): straight_1k on Intel.
     if (intel) return .straight_1k;
     return if (std.mem.eql(u8, cpu, "znver4")) .tiered else .compact;
 }
 
 /// The kernel objects of the x86_64 runtime dispatch, one per -Dcpu
-/// (docs/runtime-dispatch.md). src/x86_64/cpuid.zig names the same levels.
+/// (docs/slop/runtime-dispatch.md). src/x86_64/cpuid.zig names the same levels.
 const dispatch_levels = [_][]const u8{
     "x86_64_v3",     "x86_64_v4", "sapphirerapids",
     "graniterapids", "znver4",    "znver5",
@@ -166,7 +166,7 @@ const Fastmem = struct {
 
 /// A hex id that is unique per package instance in a build graph. The x86
 /// dispatch symbols contain it, so that two fastmem packages in one link do
-/// not collide (docs/runtime-dispatch.md). Zig creates one `std.Build` per
+/// not collide (docs/slop/runtime-dispatch.md). Zig creates one `std.Build` per
 /// build root and user options (`dependencyInner` in std/Build.zig): the id
 /// hashes the same key. A fetched package uses its root relative to the
 /// global cache, so that the id does not depend on the cache location.
@@ -213,7 +213,7 @@ pub fn build(b: *std.Build) void {
     // no_builtin: LLVM must not idiom-recognize fastmem's own loops into
     // memcpy/memset calls (recursion under the export layer).
     // omit_frame_pointer: the C-ABI kernels must not pay x29/x30 prologues
-    // where a frame exists (docs/fastmem-plan.md Facts).
+    // where a frame exists (docs/slop/fastmem-plan.md Facts).
     const mod = b.addModule("fastmem", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -302,7 +302,7 @@ pub fn build(b: *std.Build) void {
     });
     const install_libc_probe = b.addInstallArtifact(libc_probe, .{});
     // `zig build install` ships libc-probe next to bench-fastmem for the
-    // selected -Dtarget/-Dcpu, per docs/bench-design.md.
+    // selected -Dtarget/-Dcpu, per docs/slop/bench-design.md.
     b.getInstallStep().dependOn(&install_libc_probe.step);
     const libc_probe_step = b.step("libc-probe", "Build the libc symbol probe");
     libc_probe_step.dependOn(&install_libc_probe.step);
@@ -621,7 +621,7 @@ fn addX86Codegen(
     return probes;
 }
 
-/// The runtime-dispatch gate (docs/runtime-dispatch.md): the stub shape and
+/// The runtime-dispatch gate (docs/slop/runtime-dispatch.md): the stub shape and
 /// the inline classes of a baseline build, the equality of each level object
 /// with the comptime kernel for its CPU, and the unit tests under qemu.
 fn addDispatchTests(
@@ -719,7 +719,7 @@ fn addDispatchTests(
 }
 
 /// The dispatch test hook stays out of the public module, and two package
-/// instances link together (docs/runtime-dispatch.md).
+/// instances link together (docs/slop/runtime-dispatch.md).
 fn addPackageTests(b: *std.Build, fm: *Fastmem, public: *std.Build.Module) *std.Build.Step {
     const step = b.step("test-export-packages", "Check the package boundary of the x86 dispatch");
     const baseline = b.resolveTargetQuery(std.Target.Query.parse(.{

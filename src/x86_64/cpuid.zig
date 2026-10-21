@@ -172,7 +172,7 @@ const v4: Mask = .{
 };
 
 // Synthetic hosts. The model numbers of the fleet come from
-// docs/research/hosts/*/lscpu.txt.
+// docs/slop/research/hosts/*/lscpu.txt.
 fn host(vendor: Vendor, family: u32, model: u32) Info {
     return .{ .vendor = vendor, .family = family, .model = model, .features = v4 };
 }

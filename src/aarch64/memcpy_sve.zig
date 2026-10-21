@@ -248,7 +248,7 @@ fn headNeon(comptime p: []const u8) []const u8 {
 // 16..2*VL. The cntb sits in the >= 16 block: the tree never needs it.
 // The >= 16 block checks 128 before 2*VL and routes (2*VL, 128]
 // straight to the SVE mid block. Review tracing of the armg change
-// (docs/results/armg-mid-paths.md) shows this changes nothing at
+// (docs/slop/results/armg-mid-paths.md) shows this changes nothing at
 // 65..128 — the old neon mid entry's re-checks exactly offset the new
 // cmp — and buys one taken branch plus two instructions only at
 // > 128 (V1 fleet rows move/disjoint,fwd-gap4096/256 measured 1.09x
@@ -300,7 +300,7 @@ fn headHybrid(comptime p: []const u8) []const u8 {
 // 33..2*VL pays one extra not-taken cmp32/b.lo pair; the 33+
 // fall-through is otherwise unchanged. Not the default anywhere; the
 // fleet A/Bs it on V1 (branch fleet3/armh-move-neon32,
-// docs/results/armh-graviton-gaps.md).
+// docs/slop/results/armh-graviton-gaps.md).
 fn headHybridN32(comptime p: []const u8) []const u8 {
     const pair = if (comptime std.mem.eql(u8, p, "mov"))
         // Move flavor: one exact transfer at 16 bytes, like the neon
@@ -361,7 +361,7 @@ fn headHybridN32(comptime p: []const u8) []const u8 {
 // predicted-taken branches in the head — glibc's __memmove_sve budget.
 // The price is one taken branch on the 1..3 class, which sits at
 // exactly 1.000x compiler-rt on c7g; p3-armc measured that shape at
-// 1.33x on V3 (docs/results/small-path-aarch64c.md). Untried on V1:
+// 1.33x on V3 (docs/slop/results/small-path-aarch64c.md). Untried on V1:
 // armg left it as the next measurement for the c7g move
 // disjoint/fwd-gap4096 96..128 rows (1.10-1.21x glibc in run
 // 20260927T162241Z-final-standard), where the tree-first head pays
@@ -442,7 +442,7 @@ const mid_sve =
 // misalignment on Neoverse V3 (copy/misaligned/48 at 1.50x glibc in
 // bench-results/20260926T112106Z-smallmove-v1; the pair shape runs the
 // same 4.00 cycles as glibc locally). The trade, disclosed in
-// docs/results/armg-mid-paths.md: under 4K aliasing at exactly 64 bytes
+// docs/slop/results/armg-mid-paths.md: under 4K aliasing at exactly 64 bytes
 // the pair block runs a few percent above compiler-rt's loop-class
 // entry (local V3: aligned/64 1.05x, page-offset/64 1.10x), while the
 // chunk block beats compiler-rt there — G2's misaligned failures were
@@ -467,7 +467,7 @@ const mid_neon = (if (v3_copy_fallthrough) mid_neon_v3_entry else "") ++
 // instructions with 2 taken branches against the 21/2 of glibc's
 // __memcpy_sve (fleet c9g copy misaligned/cross-lane 127 sat at
 // 1.09-1.13x glibc with an instruction-identical data path — the gap
-// was dispatch overhead, see docs/results/armh-graviton-gaps.md). Only
+// was dispatch overhead, see docs/slop/results/armh-graviton-gaps.md). Only
 // this fall-through uses the split tail; gt32/mov_gt32 keep the single
 // upstream 65..128 block so the move path stays byte-identical to main.
 const mid_neon_v3_entry =

@@ -10,12 +10,12 @@ the runtime DCZID_EL0 check.
 
 Ground truth: all three Graviton targets run the same glibc 2.40 binary
 (`/nix/store/jjjpj4p9bz505ac1c747f2j5z3xw170p-glibc-2.40-224/lib/libc.so.6`,
-per `docs/research/hosts/{c7g,c8g,c9g}/libc-probe.json`) and select
+per `docs/slop/research/hosts/{c7g,c8g,c9g}/libc-probe.json`) and select
 `__memcpy_sve`, `__memmove_sve`, `__memset_sve_zva64`
-(`docs/research/hosts/README.md`). No target has FEAT_MOPS. All report
+(`docs/slop/research/hosts/README.md`). No target has FEAT_MOPS. All report
 `prefer_sve_ifuncs=1`.
 
-- c7g V1: SVE only, no SVE2 (`docs/research/hosts/c7g/cpu.txt` flags
+- c7g V1: SVE only, no SVE2 (`docs/slop/research/hosts/c7g/cpu.txt` flags
   list `sve` but no `sve2`); VL 256-bit on Graviton3 (AGENTS.md
   benchmark-targets table: "c7g — Graviton3 / Neoverse-V1 (256-bit SVE)").
 - c8g V2: SVE2 (`c8g/cpu.txt` flags include `sve2`), VL 128-bit on
@@ -24,7 +24,7 @@ per `docs/research/hosts/{c7g,c8g,c9g}/libc-probe.json`) and select
   ecv, afp, wfxt over c8g but say nothing about width; §7 has the probe
   plan. The design does not depend on it (§5, runtime `cntb`).
 - L1d 64 KiB/core, L2 1 MiB/core (V1) or 2 MiB/core (V2/V3), L3 32/36/48 MiB
-  shared (`docs/research/hosts/{c7g,c8g,c9g}/lscpu.txt`).
+  shared (`docs/slop/research/hosts/{c7g,c8g,c9g}/lscpu.txt`).
 
 ## 1. What glibc does on V1/V2/V3
 
@@ -37,7 +37,7 @@ not transcribed.
 
 - All three Graviton targets resolve `memcpy`→`__memcpy_sve` (0xaed80),
   `memmove`→`__memmove_sve` (0xaee80), `memset`→`__memset_sve_zva64`
-  (0xb00c0): `docs/research/hosts/{c7g,c8g,c9g}/libc-probe.json`.
+  (0xb00c0): `docs/slop/research/hosts/{c7g,c8g,c9g}/libc-probe.json`.
 - The memset ifunc (symbol `memset`, type `i`, at 0xa7800; the resolver
   code is also named `__libc_memset_ifunc` in `.symtab`, same address —
   verified with `llvm-nm`) checks, in order: a MOPS feature byte at
@@ -53,7 +53,7 @@ not transcribed.
   So a 64-byte ZVA block is confirmed on all three targets — directly
   corroborated by `aarch64.cpu_features.zva_size=0x40` and
   `dczid_el0=0x4` on every core in
-  `docs/research/hosts/{c7g,c8g,c9g}/ld-diagnostics.txt:117,122-137`.
+  `docs/slop/research/hosts/{c7g,c8g,c9g}/ld-diagnostics.txt:117,122-137`.
 
 ### `__memcpy_sve` (0xaed80) — size classes
 
@@ -137,7 +137,7 @@ for large sizes must come from the NEON loop structure itself
 small sizes, from removing the call/return and letting the size-class
 branches predict against the caller's actual mix (G4; note the harness
 calls glibc through a `dlsym` pointer, so there is no PLT delta to
-harvest — `docs/fastmem-plan.md` measurement table), not from beating
+harvest — `docs/slop/fastmem-plan.md` measurement table), not from beating
 the predicated two-vector idiom.
 
 ## 2. Arm Optimized Routines
@@ -200,10 +200,10 @@ real percentage points on V2**.
   challenger, not the default.
 - `memcpy-advsimd.S` is the G6 generic-aarch64 reference.
 - Attribution: keep the Arm copyright header, name the file and pinned
-  commit, list the port in `THIRD_PARTY.md` per `docs/fastmem-plan.md`
+  commit, list the port in `THIRD_PARTY.md` per `docs/slop/fastmem-plan.md`
   licensing rules.
 - No reason to port `*-mops.S`: no Graviton target has FEAT_MOPS
-  (`docs/research/hosts/README.md`).
+  (`docs/slop/research/hosts/README.md`).
 - Header template per ported file: upstream copyright lines exactly as
   in the source file (`Copyright (c) 2019-2023, Arm Limited.` for
   `memcpy-sve.S:3`; `Copyright (c) 2024-2024, Arm Limited.` for
@@ -358,7 +358,7 @@ code around it. The 64 B block size is confirmed on all three bench
 boxes twice over: glibc's resolver selected the zva64 variant at runtime
 (`libc-probe.json`; resolver compare at 0xa7838/0xa7864), and
 `zva_size=0x40` / `dczid_el0=0x4` appear in
-`docs/research/hosts/{c7g,c8g,c9g}/ld-diagnostics.txt:117,122-137`.
+`docs/slop/research/hosts/{c7g,c8g,c9g}/ld-diagnostics.txt:117,122-137`.
 
 Even so, the ZVA path keeps AOR's runtime check (parent ruling):
 `mrs`+`and`+`cmp` against block size 4 (= 64 B), 4 instructions executed
@@ -563,7 +563,7 @@ Broadcast with `@splat` into `@Vector(16, u8)` — E7 shows it emits
 
 Note the alignment asymmetry glibc uses: memcpy aligns the **source**
 (load side), memset aligns the **destination** (store side). The copy
-side is settled by 0.15.2-era measurement (`docs/results/zig-0.15-benchmark-hosts.md`
+side is settled by 0.15.2-era measurement (`docs/slop/results/zig-0.15-benchmark-hosts.md`
 c8g section, line ~125: matching source alignment "fixed the worst
 non-libc c8g regressions"); H7 in §6 tests the memset side.
 
@@ -603,7 +603,7 @@ the SVE-target builds the first draft cited.
 
 The first draft got this wrong; corrected per review. `dist/small` uses
 **runtime** sizes — "each call has a different size and a different
-offset" (`docs/bench-design.md:384-388`) — so no comptime folding
+offset" (`docs/slop/bench-design.md:384-388`) — so no comptime folding
 applies and the size-class branches stay, mispredicting on the random
 mix. And there is no PLT delta: the harness calls glibc through a
 `dlsym` pointer. The inline runtime path therefore works like this:
@@ -632,7 +632,7 @@ the fragment, at risk on c7g otherwise; the harness decides in P4.
 ### What is deliberately not in the design
 
 - No MOPS (`cpyp`/`cpyfp`): no target has FEAT_MOPS
-  (`docs/research/hosts/README.md`), and the CPU models lack the feature
+  (`docs/slop/research/hosts/README.md`), and the CPU models lack the feature
   so LLVM cannot emit it.
 - No SVE in the large loop: glibc/AOR use NEON there even on 256-bit V1;
   wider-SVE large loops are an H-list experiment (§6), not the design.
@@ -643,13 +643,13 @@ the fragment, at risk on c7g otherwise; the harness decides in P4.
 
 Harness flow (AGENTS.md): `just bench-up c7g c8g c9g`, then
 `just bench-run --rev <base> --rev <candidate> --suite quick` (5+ rounds,
-A/A noise floor per `docs/bench-design.md`), then `just b analyze
+A/A noise floor per `docs/slop/bench-design.md`), then `just b analyze
 bench-results/<run-id>/`. Baseline for every comparison: P1d's
-`docs/results/baseline-0.16.md` numbers.
+`docs/slop/results/baseline-0.16.md` numbers.
 
 1. **H1 — the AOR-parity port closes the c8g aligned 4096/16384
    residual.** The 0.15.2-era fastmem never caught glibc on large
-   **aligned** copies on c8g: `docs/results/zig-0.15-benchmark-hosts.md` c8g section
+   **aligned** copies on c8g: `docs/slop/results/zig-0.15-benchmark-hosts.md` c8g section
    (line ~128: "large aligned copy (`4096B` and `16384B`)"; line ~130:
    reference run `bench-results/trials/20260308-155235-c8g-exact-stride-single/`,
    "remaining copy gap is concentrated in large aligned `16384B`").
@@ -696,7 +696,7 @@ bench-results/<run-id>/`. Baseline for every comparison: P1d's
    rules allow per-target selection.
 7. **H7 — memset destination alignment side.** glibc aligns dst for
    memset (0xb0110) but src for memcpy (0xaee10). The copy side is
-   already measured (0.15.2-era c8g work, `docs/results/zig-0.15-benchmark-hosts.md`);
+   already measured (0.15.2-era c8g work, `docs/slop/results/zig-0.15-benchmark-hosts.md`);
    hypothesis: dst-alignment is likewise optimal for memset. Cheap A/B
    against an unaligned variant.
 8. **H8 — `prfm` prefetch beyond L2.** Hypothesis: software prefetch in
@@ -709,7 +709,7 @@ bench-results/<run-id>/`. Baseline for every comparison: P1d's
 
 Closed before P3: the backward-loop pairing question (E12 — pairs on
 all four CPUs); the copy-side source-alignment question (0.15.2
-evidence, `docs/results/zig-0.15-benchmark-hosts.md` c8g line ~125); the "unroll the
+evidence, `docs/slop/results/zig-0.15-benchmark-hosts.md` c8g line ~125); the "unroll the
 builtin's loop" framing (E8 — LLVM already unrolls it; the gap is loop
 polish).
 
@@ -719,7 +719,7 @@ polish).
   V3's SVE VL (128 vs 256 bit) only shifts the small-class boundary, and
   the runtime `cntb` design absorbs it — but P3 should run a one-line
   `cntb` probe on each box once and record the result in
-  `docs/results/zig-0.15-benchmark-hosts.md`.
+  `docs/slop/results/zig-0.15-benchmark-hosts.md`.
 - **ZVA block size is a system property, not a CPU feature.** 64 B is
   proven for the three bench targets twice (glibc resolver behavior §1;
   `dczid_el0=0x4` in `ld-diagnostics.txt:122-137`), and the kernel

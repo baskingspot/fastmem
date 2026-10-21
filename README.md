@@ -38,7 +38,7 @@ exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 
 - The [guide](https://baskingspot.dev/fastmem/) covers the kernels, runtime dispatch, correctness, and the measured results.
 - The [API reference](https://baskingspot.dev/fastmem/api/) documents every public symbol.
-- [`docs/`](docs/) holds the design notes: `fastmem-plan.md`, `bench-design.md`, `export-layer.md`, `runtime-dispatch.md`, and `results/`.
+
 - [`AGENTS.md`](AGENTS.md) has the working notes for the repository.
 
 ## Work on it

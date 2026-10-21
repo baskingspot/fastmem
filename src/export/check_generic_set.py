@@ -1,7 +1,7 @@
 """Issue #1: the generic memset must not reach a byte-store loop.
 
 The object comes from x86_64 baseline (no AVX2). There the generic memset is
-the `generic` level of the runtime dispatch (docs/runtime-dispatch.md). Every
+the `generic` level of the runtime dispatch (docs/slop/runtime-dispatch.md). Every
 size class stores overlapping head and tail pieces; only the 1..3 byte class
 uses byte stores, and it uses exactly three.
 """

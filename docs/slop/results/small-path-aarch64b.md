@@ -8,7 +8,7 @@ decides.
 
 Commits: `be7a1f8` (trampoline removal), then the variant work on top
 (this commit). Baseline: run `20260924T064442Z-aor-g2`
-(docs/results/aor-g2-graviton.md).
+(docs/slop/results/aor-g2-graviton.md).
 
 ## Diagnosis (a): the c8g gap was the abi trampoline, not the kernel
 
