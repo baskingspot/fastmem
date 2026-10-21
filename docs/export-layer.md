@@ -34,6 +34,10 @@ comptime { @import("fastmem").exportSymbols(); }
 
 The root comptime call makes the executable owner responsible for the replacement.
 A dependency import cannot enable it by accident.
+Call it only from the program or shared library that owns the final link, never
+from a library that another program imports.
+A library that exports the symbols adds strong definitions to every consumer's
+link, and a consumer with its own definitions gets a link error.
 The same API also works with `zig test` and shared libraries.
 
 The package module sets `no_builtin = true` for the kernels.

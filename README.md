@@ -15,10 +15,10 @@ Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byt
 
 ## What is in it
 
-- [Explicit calls](https://baskingspot.dev/fastmem/#explicit-calls): `copy`, `move`, and `set`, generic over the element type, inline at the call site.
-- [Replacing the symbols](https://baskingspot.dev/fastmem/#replacing-the-symbols): `exportSymbols()` gives the link strong, hidden `memcpy`, `memmove`, and `memset` for ELF programs.
-- [Kernels](https://baskingspot.dev/fastmem/#kernels): AVX-512 and AVX2 kernels with per-model tuning, Arm Optimized Routines on aarch64, runtime CPUID dispatch where the build has no AVX2, and a generic fallback.
-- [Results](https://baskingspot.dev/fastmem/#results): one file per fleet measurement, and a scorecard against glibc and compiler-rt on all seven targets.
+- [Kernels](https://baskingspot.dev/fastmem/#kernels): AVX-512 and AVX2 kernels with per-model tuning, Arm Optimized Routines on aarch64, and a generic fallback.
+- [Runtime dispatch](https://baskingspot.dev/fastmem/#runtime-dispatch): one x86_64 Linux baseline binary selects AVX-512, AVX2, or generic kernels from CPUID.
+- [Correctness](https://baskingspot.dev/fastmem/#correctness): the guard-page suite, the per-model codegen gates, and the export-layer binary checks.
+- [Results](https://baskingspot.dev/fastmem/#results): the scorecard against glibc and compiler-rt on all seven targets.
 - [Limits](https://baskingspot.dev/fastmem/#limits): the export layer is ELF only and needs the LLVM backend; other targets get the generic vector fallback.
 
 ## Install
@@ -36,7 +36,7 @@ exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 
 ## Documentation
 
-- The [guide](https://baskingspot.dev/fastmem/) covers the API, the kernels, the results, and the limits.
+- The [guide](https://baskingspot.dev/fastmem/) covers the API, the kernels, runtime dispatch, correctness, and the measured results.
 - [`docs/`](docs/) holds the design notes: `fastmem-plan.md`, `bench-design.md`, `export-layer.md`, `runtime-dispatch.md`, and `results/`.
 - [`AGENTS.md`](AGENTS.md) has the working notes for the repository.
 
@@ -46,7 +46,7 @@ exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 just ci
 ```
 
-`nix develop` provides the toolchain, `just --list` shows the recipes, and `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet is described in `docs/bench-design.md` and `infra/README.md`.
+`nix develop` provides the toolchain. `just --list` shows the recipes. `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet is described in `docs/bench-design.md` and `infra/README.md`.
 
 ## License
 

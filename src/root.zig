@@ -358,6 +358,10 @@ else
 /// Replace the memory symbols in this link with strong, hidden aliases of
 /// the `abi` entries. Call once from the root comptime block. See
 /// docs/export-layer.md.
+/// Export strong, hidden `memcpy`, `memmove`, and `memset` for this link unit.
+/// Call it from the program that owns the final link, never from a library
+/// that another program imports: the definitions would join every consumer's
+/// link and collide with the consumer's own symbols.
 pub fn exportSymbols() void {
     if (builtin.target.ofmt != .elf or
         (builtin.cpu.arch != .aarch64 and builtin.cpu.arch != .x86_64))
