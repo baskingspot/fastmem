@@ -5,9 +5,6 @@ title = "fastmem"
 Fast `memcpy`, `memmove`, and `memset` for Zig. The kernels are tuned per CPU
 model and measured against glibc and compiler-rt on seven EC2 targets.
 
-- [Getting started](#getting-started)
-- [Explicit calls](#explicit-calls)
-- [Replacing the symbols](#replacing-the-symbols)
 - [Kernels](#kernels)
 - [Results](#results)
 - [Limits](#limits)
