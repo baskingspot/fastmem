@@ -18,3 +18,4 @@ dark_theme = "github-dark"
 
 [extra]
 repo = "baskingspot/fastmem"
+api = true

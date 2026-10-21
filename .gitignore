@@ -22,4 +22,5 @@ core
 core.[0-9]*
 
 # The docs module copies the shared theme here at build time.
+docs/data/
 docs/themes/

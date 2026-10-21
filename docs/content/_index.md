@@ -8,7 +8,8 @@ slower than glibc on most CPUs. fastmem replaces them with kernels tuned per
 CPU model, measured against glibc and compiler-rt on seven EC2 targets.
 
 You can call the kernels directly, or export them as the memory symbols for a
-link unit. The library imports only `std` and builds with Zig 0.16.0.
+link unit. The library imports only `std` and builds with Zig 0.16.0. The
+[API reference](api/) documents every public symbol.
 
 - [Kernels](#kernels)
 - [Runtime dispatch](#runtime-dispatch)

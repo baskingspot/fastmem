@@ -65,13 +65,19 @@ ci: test lint codegen-x86 bench-check test-infra doc
 
 [doc("Build the site into zig-out/site/fastmem/ from docs/")]
 [group("docs")]
-doc:
+doc: api
     baskingspot-docs build fastmem
 
-[doc("Edit the guide with live reload (http://127.0.0.1:1111)")]
+[doc("Edit the guide with live reload (http://127.0.0.1:1111), API reference included")]
 [group("docs")]
-guide:
+guide: api
     baskingspot-docs serve fastmem
+
+# The API reference data. docgen comes from the baskingspot flake's docs shell,
+# so this is not a Zig build dependency.
+[private]
+api:
+    docgen --root src/root.zig --title fastmem --repo-url https://github.com/baskingspot/fastmem --rev main --format json --out docs/data
 
 [doc("Deploy the rendered site to Cloudflare as an assets-only Worker (config in wrangler.jsonc). Needs CLOUDFLARE_API_TOKEN in the environment, plus CLOUDFLARE_ACCOUNT_ID if the token can see more than one account")]
 [group("docs")]
