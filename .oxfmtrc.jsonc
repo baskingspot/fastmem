@@ -1,0 +1,6 @@
+{
+  "printWidth": 100,
+  // The Zola templates are Tera, not HTML. The formatter reads `{% %}` as
+  // text and reflows around it, so it stays away from them.
+  "ignorePatterns": ["docs/templates/**"],
+}

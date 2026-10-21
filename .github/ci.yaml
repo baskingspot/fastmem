@@ -1,0 +1,3 @@
+jobs:
+  - recipe: ci
+  - recipe: test-guard
