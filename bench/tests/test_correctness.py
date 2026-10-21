@@ -419,4 +419,6 @@ def test_all_modes_flag(config: Config) -> None:
     ctx.ensure_object(type("C", (), {}))
     params = {p.name: p for p in test_fleet.params}
     assert "all_modes" in params
-    assert params["all_modes"].is_flag
+    option = params["all_modes"]
+    assert isinstance(option, click.Option)
+    assert option.is_flag
