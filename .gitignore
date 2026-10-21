@@ -8,6 +8,8 @@
 crash.log
 bench-results/
 zig-pkg/
+.direnv/
+.envrc.local
 .zig-cache/
 zig-out/
 .bench-cache/
