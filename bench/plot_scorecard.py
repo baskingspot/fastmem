@@ -16,11 +16,11 @@ OUTPUT = ROOT / "docs/static/benchmark.svg"
 
 TIERS = ["0–16", "17–64", "65–256", "257–1K", "1K–16K", ">16K"]
 OPERATIONS = ("set", "copy", "move")
-COLORS = {"set": "#d4412b", "copy": "#58616c", "move": "#9a8f80"}
+COLORS = {"set": "#d4412b", "copy": "#58616c", "move": "#16191d"}
 INK = "#16191d"
 PAPER = "#f4f1ec"
 SLATE = "#58616c"
-RULE = "#ddd6cb"
+RULE = "#58616c"
 
 
 def table(text: str, heading: str) -> dict[str, list[list[float]]]:
@@ -100,7 +100,7 @@ def render() -> None:
             )
             if baseline == "glibc 2.40":
                 handles.append(line)
-        axis.axhline(1, color="#a3abb5", linewidth=1, linestyle=(0, (4, 3)), zorder=0)
+        axis.axhline(1, color=RULE, linewidth=1, linestyle=(0, (4, 3)), alpha=0.55, zorder=0)
         axis.set_yscale("log")
         axis.set_ylim(0.8, 32)
         axis.set_xlim(-0.35, 5.35)
@@ -108,13 +108,14 @@ def render() -> None:
         axis.set_yticks([1, 2, 4, 8, 16, 32])
         axis.set_yticklabels(["1×", "2×", "4×", "8×", "16×", "32×"], fontsize=8.5)
         axis.minorticks_off()
-        axis.grid(axis="y", color=RULE, linewidth=0.8)
+        axis.grid(axis="y", color=RULE, linewidth=0.8, alpha=0.18)
         axis.set_axisbelow(True)
         axis.tick_params(length=0, pad=6)
         for side in ("top", "right"):
             axis.spines[side].set_visible(False)
         for side in ("left", "bottom"):
             axis.spines[side].set_linewidth(0.8)
+            axis.spines[side].set_alpha(0.25)
         axis.set_title(
             f"vs {baseline}",
             loc="left",
@@ -157,7 +158,8 @@ def render() -> None:
         0.025,
         "Zig 0.16.0 · glibc 2.40 · six rounds · September 2026",
         fontsize=8,
-        color="#8a8f98",
+        color=RULE,
+        alpha=0.75,
     )
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
