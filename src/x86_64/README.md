@@ -104,25 +104,25 @@ No file under `src/aarch64/` changed.
 3. Run the hardware correctness matrix without `--up`.
 
 ```sh
-nix develop /Users/matt/code/fastmem-zig -c just --justfile /Users/matt/code/fastmem-zig/Justfile b test --target c7i --target c8i --target c7a --target c8a
+nix develop ~/code/baskingspot/fastmem -c just --justfile ~/code/baskingspot/fastmem/justfile b test --target c7i --target c8i --target c7a --target c8a
 ```
 
 4. Run the standard suite with five rounds and the default A/A floor.
 
 ```sh
-nix develop /Users/matt/code/fastmem-zig -c just --justfile /Users/matt/code/fastmem-zig/Justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite standard --rounds 5 --label p3-x86-standard
+nix develop ~/code/baskingspot/fastmem -c just --justfile ~/code/baskingspot/fastmem/justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite standard --rounds 5 --label p3-x86-standard
 ```
 
 5. Run the large suite for the REP windows and NT paths.
 
 ```sh
-nix develop /Users/matt/code/fastmem-zig -c just --justfile /Users/matt/code/fastmem-zig/Justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite large --rounds 5 --label p3-x86-large
+nix develop ~/code/baskingspot/fastmem -c just --justfile ~/code/baskingspot/fastmem/justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite large --rounds 5 --label p3-x86-large
 ```
 
 6. Run the forward-gap cases separately for the Intel overlap regression.
 
 ```sh
-nix develop /Users/matt/code/fastmem-zig -c just --justfile /Users/matt/code/fastmem-zig/Justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite standard --filter move/fwd-gap --rounds 5 --label p3-x86-fwd-gap
+nix develop ~/code/baskingspot/fastmem -c just --justfile ~/code/baskingspot/fastmem/justfile bench-run --rev WORKTREE --target c7i --target c8i --target c7a --target c8a --suite standard --filter move/fwd-gap --rounds 5 --label p3-x86-fwd-gap
 ```
 
 ## Remaining limits

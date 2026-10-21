@@ -1,4 +1,4 @@
-# fastmem-zig: agent notes
+# fastmem: agent notes
 
 fastmem gives Zig a `memcpy`, `memmove`, and `memset` that are equal to or
 faster than glibc and compiler-rt. `README.md` is the user overview.
@@ -38,7 +38,9 @@ a kernel or make a performance claim.
   `infra/README.md` is the runbook.
 - `docs/`: `fastmem-plan.md`, `bench-design.md` (the benchmark contract),
   `export-layer.md`, `runtime-dispatch.md`, `research/` (design memos, host
-  facts), `results/` (one file per fleet measurement).
+  facts), `results/` (one file per fleet measurement). `docs/content/` is the
+  site guide, `docs/static/` holds the marks, and `wrangler.jsonc` deploys it
+  as `baskingspot-dev-fastmem`.
 
 ## Toolchain
 
@@ -53,14 +55,18 @@ a kernel or make a performance claim.
 
 - `just test`: unit tests, export checks, and a build of every shipped
   binary. It must pass before a commit.
-- `just lint`: ziglint over the `.ziglint.zon` paths and `zig fmt --check`.
-  Run it before you call Zig work done.
+- `just lint`: ziglint, Zig, Nix, Markdown, the workflows, and justfile
+  formatting. Run it before you call Zig work done.
+- `just ci`: everything the main CI job runs, including `bench-check` and
+  `test-infra`. `just test-guard` is the separate guard-page lane.
+- `just doc`: build the site into `zig-out/site/fastmem/`.
 - `just test-guard`: the guard-page matrix on this host.
 - `just codegen-x86`: the x86 codegen gate for every fleet CPU model.
-- `just bench-up [targets]`, `just bench-test --optimize ReleaseFast
-  --optimize ReleaseSafe --optimize Debug`, `just bench-run --rev A --rev B
-  --suite standard --rounds 5`, `just b analyze <run-dir>`, `just
-  bench-down`. `bench run --cpu baseline` measures G6.
+- `just bench-up`.
+- `just bench-test --optimize ReleaseFast --optimize ReleaseSafe --optimize Debug`.
+- `just bench-run --rev A --rev B --suite standard --rounds 5`.
+- `just b analyze <run-dir>` and `just bench-down`.
+- `bench run --cpu baseline` measures G6.
 
 ## Benchmark targets
 
@@ -69,15 +75,15 @@ its builds dispatch at run time to the level named by `zig_cpu`. All
 `.xlarge`, us-west-2, account
 396684171460 ("playground"), profile `fastmem-bench`.
 
-| Target | CPU | x86 variant / aarch64 small path |
-|---|---|---|
-| c7i | Sapphire Rapids | straight_1k |
-| c8i | Granite Rapids | straight_1k |
-| c7a | Zen 4 | tiered |
-| c8a | Zen 5 | compact |
-| c7g | Neoverse V1 (256-bit SVE) | copy/set sve, move hybrid |
-| c8g | Neoverse V2 | copy/set sve, move hybrid |
-| c9g | Neoverse V3 | copy/set neon, move hybrid |
+| Target | CPU                       | x86 variant / aarch64 small path |
+| ------ | ------------------------- | -------------------------------- |
+| c7i    | Sapphire Rapids           | straight_1k                      |
+| c8i    | Granite Rapids            | straight_1k                      |
+| c7a    | Zen 4                     | tiered                           |
+| c8a    | Zen 5                     | compact                          |
+| c7g    | Neoverse V1 (256-bit SVE) | copy/set sve, move hybrid        |
+| c8g    | Neoverse V2               | copy/set sve, move hybrid        |
+| c9g    | Neoverse V3               | copy/set neon, move hybrid       |
 
 ## Rules
 
@@ -97,7 +103,7 @@ its builds dispatch at run time to the level named by `zig_cpu`. All
 - A kernel change that changes aarch64 bytes updates GOLDEN in
   `src/export/check_kernel_bytes.py` in the same commit, on purpose.
 - Fleet scripts tear down only the targets that they launched. `bench down
-  --all` stops every run on the fleet.
+--all` stops every run on the fleet.
 - Correctness on a variant runs ReleaseFast. Debug and ReleaseSafe run on
   main, and once per merge wave with `bench test --all-modes`. The
   kernel-bytes pin (`zig build test-export`) proves a variant's kernels
