@@ -9,6 +9,11 @@ Fast memcpy, memmove, and memset for Zig.
 
 Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byte loop, and its `memcpy` and `memmove` are slower than glibc on most CPUs. fastmem replaces them with kernels that are tuned per CPU model and measured against glibc and compiler-rt on seven EC2 targets.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/static/benchmark-dark.svg">
+  <img src="docs/static/benchmark.svg" alt="fastmem speedup over compiler-rt by size tier: memset reaches 16x the median and up to 25x above 16 KiB; copy and move stay near 1x to 2x" width="700" height="336">
+</picture>
+
 - MIT license (`LICENSE`). The aarch64 kernels are ports of Arm Optimized Routines (MIT). `THIRD_PARTY.md` lists every port.
 - Zig 0.16.0. No libc dependency.
 - Correctness: a guard-page suite of about 28 million cases per build runs on the target hardware in ReleaseFast, ReleaseSafe, and Debug.
@@ -47,7 +52,7 @@ exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 just ci
 ```
 
-`nix develop` provides the toolchain. `just --list` shows the recipes. `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet is described in `docs/bench-design.md` and `infra/README.md`.
+`nix develop` provides the toolchain. `just --list` shows the recipes. `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet is described in `infra/README.md`.
 
 ## License
 

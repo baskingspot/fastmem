@@ -10,7 +10,8 @@ a kernel or make a performance claim.
 
 Docs are for human readers unless they live in `docs/slop/`. The README, the
 guide, `CHANGELOG.md`, and `THIRD_PARTY.md` are human-facing and must not link
-`docs/slop/`. This file and code comments may.
+`docs/slop/`. This file and code comments may. The benchmark chart leads the
+README and the guide; keep it there.
 
 ## Layout
 
@@ -39,8 +40,8 @@ guide, `CHANGELOG.md`, and `THIRD_PARTY.md` are human-facing and must not link
 - `src/asm_probe.zig`: C-ABI wrappers for `zig build asm`.
 - `bench/`: the Python (uv) harness. `ec2bench/` is the generic fleet
   library. `fastmem_bench/` builds, runs, and analyzes. `bench.toml`
-  configures both. `plot_scorecard.py` renders the guide's benchmark chart;
-  `just plot` regenerates it.
+  configures both. `plot_scorecard.py` renders the light and dark benchmark
+  charts; `just plot` regenerates both.
 - `infra/`: OpenTofu. `modules/bench-iam` and `modules/bench-base`, root
   stacks `iam/` (a human applies it) and `base/` (the agent applies it).
   `infra/README.md` is the runbook.
@@ -71,7 +72,7 @@ guide, `CHANGELOG.md`, and `THIRD_PARTY.md` are human-facing and must not link
 - `just ci`: everything the main CI job runs, including `bench-check` and
   `test-infra`. `just test-guard` is the separate guard-page lane.
 - `just doc`: build the site into `zig-out/site/fastmem/`.
-- `just plot`: regenerate `docs/static/benchmark.svg` from the scorecard.
+- `just plot`: regenerate the light and dark benchmark charts from the scorecard.
 - `just test-guard`: the guard-page matrix on this host.
 - `just codegen-x86`: the x86 codegen gate for every fleet CPU model.
 - `just bench-up`.

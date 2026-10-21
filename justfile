@@ -84,7 +84,7 @@ api:
 doc-deploy: doc
     wrangler deploy
 
-[doc("Regenerate docs/static/benchmark.svg from the scorecard (uses the bench dev environment)")]
+[doc("Regenerate the light and dark benchmark charts in docs/static/ from the scorecard (uses the bench dev environment)")]
 [group("bench")]
 plot:
     uv run --project bench python bench/plot_scorecard.py
