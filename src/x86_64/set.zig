@@ -1,12 +1,13 @@
 //! Byte fills with straight-line classes and model-specific large paths.
 const builtin = @import("builtin");
-const tail_call = if (builtin.zig_backend == .stage2_llvm) .always_tail else .auto;
+
 const ops = @import("ops.zig");
+const w = ops.width;
+const V = ops.Vector;
 const tuning = @import("tuning.zig");
 const t = tuning.selected;
-const w = ops.width;
-const V = ops.vector;
 
+const tail_call = if (builtin.zig_backend == .stage2_llvm) .always_tail else .auto;
 inline fn pair(comptime width: u32, dst: [*]u8, value: u8, n: usize) void {
     const T = if (width < 16) @Int(.unsigned, width * 8) else @Vector(width, u8);
     const v: T = if (width < 16) (@as(T, @intCast(value)) * (~@as(T, 0) / 255)) else @splat(value);

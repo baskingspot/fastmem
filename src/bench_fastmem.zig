@@ -2,11 +2,7 @@
 //! All timings use independent code. No external memory implementation is copied here.
 
 const std = @import("std");
-const builtin = @import("builtin");
-const fastmem = @import("fastmem");
-const options = @import("bench_options");
 const Io = std.Io;
-const Allocator = std.mem.Allocator;
 const mem = std.mem;
 const fmt = std.fmt;
 const math = std.math;
@@ -18,11 +14,18 @@ const time = std.time;
 const process = std.process;
 const meta = std.meta;
 const json = std.json;
+const assert = std.debug.assert;
+const crypto = std.crypto;
 const print = std.debug.print;
 const page_size_min = std.heap.page_size_min;
 const DefaultPrng = std.Random.DefaultPrng;
 const ArenaAllocator = std.heap.ArenaAllocator;
+const Allocator = mem.Allocator;
+const builtin = @import("builtin");
+
 const c = @import("c");
+const fastmem = @import("fastmem");
+const options = @import("bench_options");
 
 const chunk_bytes = @min(std.simd.suggestVectorLength(u8) orelse 16, 32);
 const standard_sizes = [_]u32{
@@ -355,7 +358,7 @@ test "perf retries without ref-cycles and identifies the failed event" {
         var closes: u8 = 0;
         fn open(config: linux.PERF.COUNT.HW, group: i32) usize {
             opens += 1;
-            if (config == .CPU_CYCLES) std.debug.assert(group == -1);
+            if (config == .CPU_CYCLES) assert(group == -1);
             if (config == .REF_CPU_CYCLES)
                 return @bitCast(-@as(isize, @intFromEnum(linux.E.NOENT)));
             return 100 + @as(usize, opens);
@@ -922,11 +925,11 @@ fn vmaRange(line: []const u8) ?[2]u64 {
 
 test "smaps parsing sums huge pages of the overlapping mappings only" {
     const smaps =
-        \\40000000-40400000 rw-p 00000000 00:00 0 
+        \\40000000-40400000 rw-p 00000000 00:00 0
         \\Size:               4096 kB
         \\AnonHugePages:      2048 kB
         \\VmFlags: rd wr mr mw me ac hg
-        \\40400000-40600000 rw-p 00000000 00:00 0 
+        \\40400000-40600000 rw-p 00000000 00:00 0
         \\AnonHugePages:      2048 kB
         \\7f0000000000-7f0000001000 r-xp 00000000 00:00 0    [vdso]
         \\AnonHugePages:      4096 kB
@@ -1218,7 +1221,7 @@ const Codegen = struct {
             .limited(128 << 20),
         );
         var digest: [32]u8 = undefined;
-        std.crypto.hash.sha2.Sha256.hash(executable, &digest, .{});
+        crypto.hash.sha2.Sha256.hash(executable, &digest, .{});
         const hex = fmt.bytesToHex(digest, .lower);
         if (!mem.eql(u8, &hex, parsed.value.binary_sha256))
             return error.CodegenEvidenceDoesNotMatchExecutable;
@@ -1301,7 +1304,7 @@ fn emitMeta(
     const record = .{
         .type = "meta",
         .schema = schema,
-        .rev = std.mem.sliceTo(&options.rev_padded, 0),
+        .rev = mem.sliceTo(&options.rev_padded, 0),
         .zig = builtin.zig_version_string,
         .target = @tagName(builtin.cpu.arch) ++ "-" ++
             @tagName(builtin.os.tag) ++ "-" ++ @tagName(builtin.abi),

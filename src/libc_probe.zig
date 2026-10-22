@@ -13,6 +13,8 @@
 const std = @import("std");
 const Io = std.Io;
 const mem = std.mem;
+const process = std.process;
+const print = std.debug.print;
 const builtin = @import("builtin");
 
 const c = @import("c");
@@ -80,26 +82,26 @@ fn writeSymbol(w: *Io.Writer, name: []const u8, probe: Probe, first: bool) !void
     try w.print(",\"offset\":\"0x{x}\"}}", .{probe.offset});
 }
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: process.Init) !void {
     const handle = c.dlopen("libc.so.6", c.RTLD_NOW) orelse {
-        std.debug.print("libc-probe: dlopen(libc.so.6) failed: {s}\n", .{
+        print("libc-probe: dlopen(libc.so.6) failed: {s}\n", .{
             if (c.dlerror()) |e| mem.span(e) else "unknown",
         });
-        std.process.exit(1);
+        process.exit(1);
     };
 
     const memcpy_probe = probeSymbol(handle, "memcpy") catch |err| {
-        std.debug.print("libc-probe: probing memcpy failed: {s}\n", .{@errorName(err)});
-        std.process.exit(1);
+        print("libc-probe: probing memcpy failed: {s}\n", .{@errorName(err)});
+        process.exit(1);
     };
     const memmove_probe = probeSymbol(handle, "memmove") catch |err| {
-        std.debug.print("libc-probe: probing memmove failed: {s}\n", .{@errorName(err)});
-        std.process.exit(1);
+        print("libc-probe: probing memmove failed: {s}\n", .{@errorName(err)});
+        process.exit(1);
     };
 
     const memset_probe = probeSymbol(handle, "memset") catch |err| {
-        std.debug.print("libc-probe: probing memset failed: {s}\n", .{@errorName(err)});
-        std.process.exit(1);
+        print("libc-probe: probing memset failed: {s}\n", .{@errorName(err)});
+        process.exit(1);
     };
 
     const glibc_version: ?[]const u8 = if (comptime builtin.target.abi.isGnu())

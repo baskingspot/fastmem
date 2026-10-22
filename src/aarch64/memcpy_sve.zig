@@ -50,18 +50,22 @@
 // the tree is laid out to minimize taken branches per class, not
 // instruction count.
 
-const builtin = @import("builtin");
 const std = @import("std");
+const comptimePrint = std.fmt.comptimePrint;
+const mem = std.mem;
+const builtin = @import("builtin");
+
 const options = @import("fastmem_options");
+
 const instance = @import("instance.zig");
 const tuning = @import("tuning.zig");
+const copy_v = tuning.copy_small;
+const move_v = tuning.move_small;
 
 const enabled = builtin.cpu.arch == .aarch64 and
     builtin.target.ofmt == .elf and
     builtin.cpu.has(.aarch64, .sve);
 
-const copy_v = tuning.copy_small;
-const move_v = tuning.move_small;
 // The move NEON head has an exact 16-byte class, unlike copy.
 // The NEON-headed and hybrid_n32 move entries have classes the copy
 // entry lacks (exact-16; the NEON 16..32 block), so they never alias.
@@ -133,7 +137,7 @@ const head_sve =
 // are computed inside the 4..15 classes instead of hoisted: the 1..3
 // class derives its tail index from the count directly.
 fn tree(comptime p: []const u8) []const u8 {
-    return std.fmt.comptimePrint(
+    return comptimePrint(
         \\    tbnz    x2, 3, .Lfm_sve_{s}_ge8
         \\    tbnz    x2, 2, .Lfm_sve_{s}_ge4
         \\    cbz    x2, .Lfm_sve_{s}_ret0
@@ -175,11 +179,11 @@ fn tree(comptime p: []const u8) []const u8 {
 // the trade goes this way.
 fn headNeon(comptime p: []const u8) []const u8 {
     // The rejected plain NEON pair duplicated this store. The old hybrid head did not.
-    if (comptime std.mem.eql(u8, p, "mov")) return std.fmt.comptimePrint(
+    if (comptime mem.eql(u8, p, "mov")) return comptimePrint(
         \\    cmp x2, 16
         \\    b.hs .Lfm_sve_{s}_ge16
         \\
-    , .{p}) ++ tree(p) ++ std.fmt.comptimePrint(
+    , .{p}) ++ tree(p) ++ comptimePrint(
         \\    .p2align 4
         \\.Lfm_sve_mov_ge16:
         \\    cmp x2, 32
@@ -198,7 +202,7 @@ fn headNeon(comptime p: []const u8) []const u8 {
         \\    ret
         \\
     , .{if (move_mid_chunk) ".Lfm_sve_mov_gt32" else ".Lfm_sve_cpy_gt32"});
-    if (comptime (std.mem.eql(u8, p, "cpy") and v3_copy_fallthrough))
+    if (comptime (mem.eql(u8, p, "cpy") and v3_copy_fallthrough))
         // Inverted 32 test: 16..32 branches out, 33+ falls through into
         // the mid block, which copyEntry must emit immediately after.
         // ge16 is exactly 16 bytes of pure dispatch (the 32 and 128
@@ -207,11 +211,11 @@ fn headNeon(comptime p: []const u8) []const u8 {
         // hoisted adds used to serve it from ge16, where every n > 32
         // call paid for them, and mid96 recomputes them because the
         // gt64 alias contract allows only x0-x2 on entry.
-        return std.fmt.comptimePrint(
+        return comptimePrint(
             \\    cmp    x2, 16
             \\    b.hs    .Lfm_sve_{s}_ge16
             \\
-        , .{p}) ++ tree(p) ++ std.fmt.comptimePrint(
+        , .{p}) ++ tree(p) ++ comptimePrint(
             \\    .p2align 4
             \\.Lfm_sve_{s}_le32:
             \\    add    x4, x1, x2
@@ -229,11 +233,11 @@ fn headNeon(comptime p: []const u8) []const u8 {
             \\    cmp    x2, 128
             \\    b.hi    .Lfm_sve_cpy_long
         , .{ p, p, p });
-    return std.fmt.comptimePrint(
+    return comptimePrint(
         \\    cmp    x2, 16
         \\    b.hs    .Lfm_sve_{s}_ge16
         \\
-    , .{p}) ++ tree(p) ++ std.fmt.comptimePrint(
+    , .{p}) ++ tree(p) ++ comptimePrint(
         \\    .p2align 4
         \\.Lfm_sve_{s}_ge16:
         \\    cmp    x2, 32
@@ -264,11 +268,11 @@ fn headNeon(comptime p: []const u8) []const u8 {
 // its taken branch. The pair path pays one not-taken cmp; glibc's
 // memmove entry checks 128 first too.
 fn headHybrid(comptime p: []const u8) []const u8 {
-    return std.fmt.comptimePrint(
+    return comptimePrint(
         \\    cmp    x2, 16
         \\    b.hs    .Lfm_sve_{s}_ge16
         \\
-    , .{p}) ++ tree(p) ++ std.fmt.comptimePrint(
+    , .{p}) ++ tree(p) ++ comptimePrint(
         \\    .p2align 4
         \\.Lfm_sve_{s}_ge16:
         \\    cntb    x6
@@ -333,11 +337,11 @@ fn headHybridN32(comptime p: []const u8) []const u8 {
         \\    ret
         \\
     ;
-    return std.fmt.comptimePrint(
+    return comptimePrint(
         \\    cmp    x2, 16
         \\    b.hs    .Lfm_sve_{s}_ge16
         \\
-    , .{p}) ++ tree(p) ++ std.fmt.comptimePrint(
+    , .{p}) ++ tree(p) ++ comptimePrint(
         \\    .p2align 4
         \\.Lfm_sve_{s}_ge16:
         \\    cntb    x6
@@ -357,7 +361,7 @@ fn headHybridN32(comptime p: []const u8) []const u8 {
         \\
         \\    .p2align 4
         \\.Lfm_sve_{s}_n31:
-    , .{ p, p, p }) ++ std.fmt.comptimePrint(pair, .{ p, p });
+    , .{ p, p, p }) ++ comptimePrint(pair, .{ p, p });
 }
 
 // Hybrid head with the >= 16 class on the fall-through
@@ -376,7 +380,7 @@ fn headHybridFt(comptime p: []const u8) []const u8 {
     // No .p2align before ge16: after bti/cmp/b.lo it would emit one
     // nop on the >= 16 fall-through, paid by every mid-size call
     // (review of b45e58d). ge16 needs no alignment of its own.
-    return std.fmt.comptimePrint(
+    return comptimePrint(
         \\    cmp    x2, 16
         \\    b.lo    .Lfm_sve_{s}_tree
         \\.Lfm_sve_{s}_ge16:

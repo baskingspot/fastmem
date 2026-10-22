@@ -1,5 +1,7 @@
 //! Binary probes keep the consumer builtins enabled.
 const std = @import("std");
+const comptimePrint = std.fmt.comptimePrint;
+
 const fastmem = @import("fastmem");
 
 comptime {
@@ -8,9 +10,9 @@ comptime {
     @export(fastmem.abi.memmove, .{ .name = "probe_abi_move" });
     @export(fastmem.abi.memset, .{ .name = "probe_abi_set" });
     for (1..257) |n| {
-        @export(&Fixed(n).copy, .{ .name = std.fmt.comptimePrint("probe_copy_{d}", .{n}) });
-        @export(&Fixed(n).move, .{ .name = std.fmt.comptimePrint("probe_move_{d}", .{n}) });
-        @export(&Fixed(n).set, .{ .name = std.fmt.comptimePrint("probe_set_{d}", .{n}) });
+        @export(&Fixed(n).copy, .{ .name = comptimePrint("probe_copy_{d}", .{n}) });
+        @export(&Fixed(n).move, .{ .name = comptimePrint("probe_move_{d}", .{n}) });
+        @export(&Fixed(n).set, .{ .name = comptimePrint("probe_set_{d}", .{n}) });
     }
 }
 

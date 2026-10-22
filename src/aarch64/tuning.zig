@@ -50,14 +50,16 @@
 //! defaults; the -Dsmall-copy / -Dsmall-set build options override them
 //! for local runs.
 
-const builtin = @import("builtin");
 const std = @import("std");
+const mem = std.mem;
+const aarch64_cpu = std.Target.aarch64.cpu;
+const stringToEnum = std.meta.stringToEnum;
+const builtin = @import("builtin");
+
 const options = @import("fastmem_options");
 
 pub const CopySmall = enum { sve, neon, hybrid, hybrid_n32, hybrid_ft };
 pub const SetSmall = enum { sve, neon };
-
-const aarch64_cpu = std.Target.aarch64.cpu;
 
 const on_neoverse_v1 = builtin.cpu.model == &aarch64_cpu.neoverse_v1;
 const on_neoverse_v2 = builtin.cpu.model == &aarch64_cpu.neoverse_v2;
@@ -107,14 +109,14 @@ pub const MidKind = enum { chunk, pair };
 pub const move_mid: MidKind = if (on_neoverse_v3) .chunk else .pair;
 
 pub const copy_small: CopySmall = blk: {
-    if (std.mem.eql(u8, options.small_copy, "auto")) break :blk default_copy_small;
-    break :blk std.meta.stringToEnum(CopySmall, options.small_copy) orelse
+    if (mem.eql(u8, options.small_copy, "auto")) break :blk default_copy_small;
+    break :blk stringToEnum(CopySmall, options.small_copy) orelse
         @compileError("unknown -Dsmall-copy value: " ++ options.small_copy);
 };
 
 pub const move_small: CopySmall = blk: {
-    if (std.mem.eql(u8, options.small_move, "auto")) break :blk default_move_small;
-    break :blk std.meta.stringToEnum(CopySmall, options.small_move) orelse
+    if (mem.eql(u8, options.small_move, "auto")) break :blk default_move_small;
+    break :blk stringToEnum(CopySmall, options.small_move) orelse
         @compileError("unknown -Dsmall-move value: " ++ options.small_move);
 };
 
@@ -127,8 +129,8 @@ pub const move_small: CopySmall = blk: {
 // Neutral on V3 locally; the fleet decides V1/V2. -Dmid-entry overrides
 // for local runs.
 pub const mid_entry: bool = blk: {
-    if (std.mem.eql(u8, options.mid_entry, "auto")) break :blk default_mid_entry;
-    if (std.mem.eql(u8, options.mid_entry, "on")) {
+    if (mem.eql(u8, options.mid_entry, "auto")) break :blk default_mid_entry;
+    if (mem.eql(u8, options.mid_entry, "on")) {
         // The alias lives in the neon mid block of the SVE kernels;
         // without a neon head the block is not emitted and the option
         // would be a silent no-op. Other targets ignore the option.
@@ -138,14 +140,14 @@ pub const mid_entry: bool = blk: {
             @compileError("-Dmid-entry=on needs a neon copy or move head");
         break :blk true;
     }
-    if (std.mem.eql(u8, options.mid_entry, "off")) break :blk false;
+    if (mem.eql(u8, options.mid_entry, "off")) break :blk false;
     @compileError("unknown -Dmid-entry value: " ++ options.mid_entry);
 };
 
 const default_mid_entry = false;
 
 pub const set_small: SetSmall = blk: {
-    if (std.mem.eql(u8, options.small_set, "auto")) break :blk default_set_small;
-    break :blk std.meta.stringToEnum(SetSmall, options.small_set) orelse
+    if (mem.eql(u8, options.small_set, "auto")) break :blk default_set_small;
+    break :blk stringToEnum(SetSmall, options.small_set) orelse
         @compileError("unknown -Dsmall-set value: " ++ options.small_set);
 };

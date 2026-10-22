@@ -3,16 +3,18 @@ const std = @import("std");
 const fmt = std.fmt;
 const mem = std.mem;
 const builtin = @import("builtin");
+
 const tuning = @import("tuning.zig");
 pub const width = tuning.vec;
-pub const vector: type = @Vector(width, u8);
+
+pub const Vector = @Vector(width, u8);
 pub const mask_available = builtin.zig_backend == .stage2_llvm and tuning.avx512;
-const mask: type = @Vector(64, bool);
+const Mask = @Vector(64, bool);
 extern fn @"llvm.masked.store.v64i8.p0"(
     value: @Vector(64, u8),
     ptr: *anyopaque,
     alignment: u32,
-    mask: mask,
+    mask: Mask,
 ) void;
 
 pub inline fn load(comptime T: type, src: [*]const u8) T {
@@ -21,15 +23,15 @@ pub inline fn load(comptime T: type, src: [*]const u8) T {
 pub inline fn store(comptime T: type, dst: [*]u8, value: T) void {
     @as(*align(1) T, @ptrCast(dst)).* = value;
 }
-pub inline fn storeAligned(dst: [*]u8, value: vector) void {
-    @as(*align(width) vector, @ptrCast(@alignCast(dst))).* = value;
+pub inline fn storeAligned(dst: [*]u8, value: Vector) void {
+    @as(*align(width) Vector, @ptrCast(@alignCast(dst))).* = value;
 }
 pub inline fn maskedSet(dst: [*]u8, value: u8, n: usize) void {
     if (comptime !mask_available) @compileError("maskedSet requires LLVM and AVX-512BW");
     const bits = (@as(u64, 1) << @as(u6, @intCast(n))) - 1;
     @"llvm.masked.store.v64i8.p0"(@splat(value), dst, 1, @bitCast(bits));
 }
-pub inline fn streamStore(dst: [*]u8, value: vector) void {
+pub inline fn streamStore(dst: [*]u8, value: Vector) void {
     if (comptime builtin.zig_backend != .stage2_llvm) {
         storeAligned(dst, value);
         return;
@@ -91,7 +93,7 @@ fn streamCopyPagesText() []const u8 {
 }
 
 // Group a full 512-byte fill behind one barrier and one address operand.
-pub inline fn streamSetBlock(dst: [*]u8, value: vector) void {
+pub inline fn streamSetBlock(dst: [*]u8, value: Vector) void {
     comptime var text: []const u8 = "";
     inline for (0..8) |i| {
         text = text ++ fmt.comptimePrint("vmovntdq %[value], {d}(%[dst])\n", .{i * 64});
@@ -105,7 +107,7 @@ pub inline fn streamSetBlock(dst: [*]u8, value: vector) void {
 
 // Keep the existing four-store temporal body below LLVM's unroll pass.
 // The caller supplies an aligned cursor below end and reserves a 256-byte tail.
-pub inline fn temporalSetLoop(dst: [*]u8, end: [*]u8, value: vector) void {
+pub inline fn temporalSetLoop(dst: [*]u8, end: [*]u8, value: Vector) void {
     if (comptime !high_available or width != 64)
         @compileError("temporalSetLoop requires 64-byte AVX-512 vectors");
     var cursor = dst;

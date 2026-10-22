@@ -8,8 +8,10 @@
 //! `build.zig` `instanceId` makes the id unique per package instance.
 
 const std = @import("std");
-const options = @import("fastmem_options");
+const mem = std.mem;
+const assert = std.debug.assert;
 
+const options = @import("fastmem_options");
 pub const id = options.instance;
 
 const needle = ".Lfm_";
@@ -19,7 +21,7 @@ fn outLen(comptime text: []const u8) usize {
     @setEvalBranchQuota(1_000_000);
     comptime var count: usize = 0;
     comptime var pos: usize = 0;
-    inline while (std.mem.indexOfPosLinear(u8, text, pos, needle)) |at| {
+    inline while (mem.indexOfPosLinear(u8, text, pos, needle)) |at| {
         count += 1;
         pos = at + needle.len;
     }
@@ -36,7 +38,7 @@ pub fn instanced(comptime text: []const u8) *const [outLen(text)]u8 {
             var buf: [outLen(text)]u8 = undefined;
             var src: usize = 0;
             var dst: usize = 0;
-            while (std.mem.indexOfPosLinear(u8, text, src, needle)) |at| {
+            while (mem.indexOfPosLinear(u8, text, src, needle)) |at| {
                 const n = at - src;
                 for (text[src..at], buf[dst .. dst + n]) |c, *o| o.* = c;
                 dst += n;
@@ -46,7 +48,7 @@ pub fn instanced(comptime text: []const u8) *const [outLen(text)]u8 {
             }
             for (text[src..], buf[dst .. dst + text.len - src]) |c, *o| o.* = c;
             dst += text.len - src;
-            std.debug.assert(dst == buf.len);
+            assert(dst == buf.len);
             break :blk buf;
         };
     };

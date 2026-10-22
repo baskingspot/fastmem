@@ -4,46 +4,47 @@
 //! decisions can diverge cleanly, while still sharing the low-level
 //! load/store primitives and the overlap-safe forward kernel.
 
-const builtin = @import("builtin");
 const std = @import("std");
 const testing = std.testing;
+const assert = std.debug.assert;
+const math = std.math;
+const mem = std.mem;
+const builtin = @import("builtin");
+
 const options = @import("fastmem_options");
 
+const aarch64_memcpy_advsimd = @import("aarch64/memcpy_advsimd.zig");
+const aarch64_memcpy_sve = @import("aarch64/memcpy_sve.zig");
+const aarch64_memset_advsimd = @import("aarch64/memset_advsimd.zig");
+const aarch64_memset_sve = @import("aarch64/memset_sve.zig");
+const aarch64_small = @import("aarch64/small.zig");
+const arm_tuning = @import("aarch64/tuning.zig");
 const common = @import("common.zig");
 const chunk_bytes = common.chunk_bytes;
 const stride = common.stride;
-// The generic Zig fallback for targets without a dedicated kernel.
+const generic = @import("generic.zig");
 const memcpy_impl = @import("memcpy.zig");
 const memmove_impl = @import("memmove.zig");
-const generic = @import("generic.zig");
+const x86_dispatch = @import("x86_64/dispatch.zig");
+const on_dispatch = x86_dispatch.enabled;
+const x86_move = @import("x86_64/move.zig");
+const x86_set = @import("x86_64/set.zig");
+const x86_tuning = @import("x86_64/tuning.zig");
+const on_x86 = x86_tuning.available;
 
+// The generic Zig fallback for targets without a dedicated kernel.
 // aarch64 kernels: ports of Arm Optimized Routines (see THIRD_PARTY.md).
 // The SVE pair is the G2 C-ABI baseline; the advsimd pair is the G6
 // generic-aarch64 path. The gates are complementary, so exactly one pair
 // emits its kernel definitions per build.
-const aarch64_memcpy_sve = @import("aarch64/memcpy_sve.zig");
-const aarch64_memset_sve = @import("aarch64/memset_sve.zig");
-const aarch64_memcpy_advsimd = @import("aarch64/memcpy_advsimd.zig");
-const aarch64_memset_advsimd = @import("aarch64/memset_advsimd.zig");
 // Loop-free small-size classes inlined at the call site (no call at
 // all at <= 64 bytes; the C-ABI kernels handle the rest).
-const aarch64_small = @import("aarch64/small.zig");
-
 // The kernel ports retain the ELF-only support boundary.
 // Non-ELF aarch64 targets, such as macOS, keep the generic Zig kernels.
 const on_aarch64 = builtin.cpu.arch == .aarch64 and builtin.target.ofmt == .elf;
-const x86_tuning = @import("x86_64/tuning.zig");
-const x86_move = @import("x86_64/move.zig");
-const x86_set = @import("x86_64/set.zig");
-const on_x86 = x86_tuning.available;
 // x86_64 Linux builds without AVX2 select the x86 kernels at run time
 // (docs/slop/runtime-dispatch.md). AVX2 builds keep the comptime selection.
-const x86_dispatch = @import("x86_64/dispatch.zig");
-const on_dispatch = x86_dispatch.enabled;
-
 const on_aarch64_sve = on_aarch64 and builtin.cpu.has(.aarch64, .sve);
-
-const arm_tuning = @import("aarch64/tuning.zig");
 
 // "+midpair-v2" marks the copy/move mid-block rework: armg's pair
 // shape at 33..64 and V3 fall-through head
@@ -170,15 +171,15 @@ test {
 
 pub inline fn copy(comptime T: type, dest: []T, source: []const T) void {
     if (comptime on_aarch64) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         const bytes = source.len * @sizeOf(T);
         const d: [*]u8 = @ptrCast(dest.ptr);
         const s: [*]const u8 = @ptrCast(source.ptr);
         // Same non-overlap contract as memcpy_impl.copy.
         const d_addr = @intFromPtr(d);
         const s_addr = @intFromPtr(s);
-        std.debug.assert(s_addr <= std.math.maxInt(usize) - bytes);
-        std.debug.assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
+        assert(s_addr <= math.maxInt(usize) - bytes);
+        assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
         if (bytes > aarch64_small.max_inline) {
             @branchHint(.unlikely);
             if (comptime on_aarch64_sve) {
@@ -196,22 +197,22 @@ pub inline fn copy(comptime T: type, dest: []T, source: []const T) void {
         return;
     }
     if (comptime on_x86) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         const bytes = source.len * @sizeOf(T);
         const d_addr = @intFromPtr(dest.ptr);
         const s_addr = @intFromPtr(source.ptr);
-        std.debug.assert(s_addr <= std.math.maxInt(usize) - bytes);
-        std.debug.assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
+        assert(s_addr <= math.maxInt(usize) - bytes);
+        assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
         x86_move.move(.disjoint, @ptrCast(dest.ptr), @ptrCast(source.ptr), bytes);
         return;
     }
     if (comptime on_dispatch) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         const bytes = source.len * @sizeOf(T);
         const d_addr = @intFromPtr(dest.ptr);
         const s_addr = @intFromPtr(source.ptr);
-        std.debug.assert(s_addr <= std.math.maxInt(usize) - bytes);
-        std.debug.assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
+        assert(s_addr <= math.maxInt(usize) - bytes);
+        assert(d_addr <= s_addr or d_addr >= s_addr + bytes);
         const d: [*]u8 = @ptrCast(dest.ptr);
         const s: [*]const u8 = @ptrCast(source.ptr);
         if (x86_move.small(dispatch_inline_max, d, s, bytes)) return;
@@ -223,7 +224,7 @@ pub inline fn copy(comptime T: type, dest: []T, source: []const T) void {
 
 pub inline fn move(comptime T: type, dest: []T, source: []const T) void {
     if (comptime on_aarch64) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         const bytes = source.len * @sizeOf(T);
         const d: [*]u8 = @ptrCast(dest.ptr);
         const s: [*]const u8 = @ptrCast(source.ptr);
@@ -246,7 +247,7 @@ pub inline fn move(comptime T: type, dest: []T, source: []const T) void {
         return;
     }
     if (comptime on_x86) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         x86_move.move(
             .may_overlap,
             @ptrCast(dest.ptr),
@@ -256,7 +257,7 @@ pub inline fn move(comptime T: type, dest: []T, source: []const T) void {
         return;
     }
     if (comptime on_dispatch) {
-        std.debug.assert(dest.len >= source.len);
+        assert(dest.len >= source.len);
         const bytes = source.len * @sizeOf(T);
         const d: [*]u8 = @ptrCast(dest.ptr);
         const s: [*]const u8 = @ptrCast(source.ptr);
@@ -277,7 +278,7 @@ pub inline fn move(comptime T: type, dest: []T, source: []const T) void {
 pub inline fn set(comptime T: type, dest: []T, value: T) void {
     if (comptime @sizeOf(T) == 0) return;
     if (comptime on_aarch64 and (T == u8 or std.meta.hasUniqueRepresentation(T))) {
-        const bytes = std.mem.asBytes(&value);
+        const bytes = mem.asBytes(&value);
         if (T == u8 or allBytesEqual(bytes)) {
             const len = dest.len * @sizeOf(T);
             const d: [*]u8 = @ptrCast(dest.ptr);
@@ -295,14 +296,14 @@ pub inline fn set(comptime T: type, dest: []T, value: T) void {
         }
     }
     if (comptime on_x86 and (T == u8 or std.meta.hasUniqueRepresentation(T))) {
-        const bytes = std.mem.asBytes(&value);
+        const bytes = mem.asBytes(&value);
         if (T == u8 or allBytesEqual(bytes)) {
             x86_set.set(@ptrCast(dest.ptr), bytes[0], dest.len * @sizeOf(T));
             return;
         }
     }
     if (comptime on_dispatch and (T == u8 or std.meta.hasUniqueRepresentation(T))) {
-        const bytes = std.mem.asBytes(&value);
+        const bytes = mem.asBytes(&value);
         if (T == u8 or allBytesEqual(bytes)) {
             const len = dest.len * @sizeOf(T);
             const d: [*]u8 = @ptrCast(dest.ptr);
@@ -422,7 +423,7 @@ test "implementation names distinguish the move-only small classes" {
     {
         try testing.expectEqualStrings(impl.copy, impl.move);
     } else if (on_x86 or on_dispatch or (on_aarch64_sve and arm_tuning.move_small == .neon)) {
-        try testing.expect(!std.mem.eql(u8, impl.copy, impl.move));
+        try testing.expect(!mem.eql(u8, impl.copy, impl.move));
     }
     if (on_x86) try testing.expectEqualStrings(x86_tuning.move_name, impl.move);
     if (on_aarch64_sve and arm_tuning.move_small == .neon) {
@@ -648,8 +649,8 @@ test "set: typed elements, uniform and non-uniform byte patterns" {
 fn expectSet(comptime T: type, value: T) !void {
     const lens = [_]usize{ 0, 1, 2, 3, 7, 15, 16, 31, 64, 65, 255, 300 };
     for (lens) |len| {
-        var got: [320]T = std.mem.zeroes([320]T);
-        var want: [320]T = std.mem.zeroes([320]T);
+        var got: [320]T = mem.zeroes([320]T);
+        var want: [320]T = mem.zeroes([320]T);
         for (want[2 .. 2 + len]) |*p| p.* = value;
         set(T, got[2 .. 2 + len], value);
         try testing.expectEqual(want, got);

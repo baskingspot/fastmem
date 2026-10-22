@@ -4,6 +4,7 @@
 //! public API: under dispatch the public API calls back through the
 //! dispatch pointers.
 const std = @import("std");
+const mem = std.mem;
 
 const memcpy_impl = @import("memcpy.zig");
 const memmove_impl = @import("memmove.zig");
@@ -73,12 +74,12 @@ pub fn setBytes(d: [*]u8, value: u8, len: usize) void {
         @as(*align(1) V16, @ptrCast(d + len - 16)).* = v;
     } else if (len >= 8) {
         const w: u64 = @as(u64, value) * 0x0101010101010101;
-        std.mem.writeInt(u64, d[0..8], w, .little);
-        std.mem.writeInt(u64, d[len - 8 ..][0..8], w, .little);
+        mem.writeInt(u64, d[0..8], w, .little);
+        mem.writeInt(u64, d[len - 8 ..][0..8], w, .little);
     } else if (len >= 4) {
         const w: u32 = @as(u32, value) * 0x01010101;
-        std.mem.writeInt(u32, d[0..4], w, .little);
-        std.mem.writeInt(u32, d[len - 4 ..][0..4], w, .little);
+        mem.writeInt(u32, d[0..4], w, .little);
+        mem.writeInt(u32, d[len - 4 ..][0..4], w, .little);
     } else if (len > 0) {
         d[0] = value;
         d[len >> 1] = value;

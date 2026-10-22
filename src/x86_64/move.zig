@@ -1,15 +1,17 @@
 //! Independent implementation of the behavioral design in x86_64-design.md.
 const builtin = @import("builtin");
-const tail_call = if (builtin.zig_backend == .stage2_llvm) .always_tail else .auto;
-const ops = @import("ops.zig");
+
 const compact = @import("compact.zig");
+const ops = @import("ops.zig");
+const w = ops.width;
+const V = ops.Vector;
 const tuning = @import("tuning.zig");
 const t = tuning.selected;
+
+const tail_call = if (builtin.zig_backend == .stage2_llvm) .always_tail else .auto;
 const source_loop = t.copy_source_min != null or t.fwd_source_min != null;
 // Keep the temporal loops in the same kernel on both sides of dispatch.
 const temporal_call = if (source_loop) .always_inline else .auto;
-const w = ops.width;
-const V = ops.vector;
 pub const Overlap = enum { may_overlap, disjoint };
 
 inline fn pair(comptime T: type, dst: [*]u8, src: [*]const u8, n: usize) void {
