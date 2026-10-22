@@ -104,7 +104,8 @@ A static library adds them as archive members.
 A compiled consumer package proved the dependency path (see "Local evidence").
 
 `Fastmem.configure` in `build.zig` applies the rule to every module of `src/root.zig`.
-It sets the `fastmem_options` flags `x86_dispatch` and `x86_test_hooks`, and the `x86_instance` id.
+It sets the `fastmem_options` flags `x86_dispatch` and `x86_test_hooks`, and the `instance` id.
+The `instance` id also prefixes the aarch64 inline-assembly labels (`src/aarch64/instance.zig`), so it is not x86-specific.
 `src/x86_64/dispatch.zig` applies the same rule at comptime, with that flag as the last condition.
 Thus a module without the objects never references their symbols.
 
@@ -246,6 +247,7 @@ The collision tests add a baseline x86_64 row.
 2. `src/export/two_packages.py` copies the package twice and builds `src/export/two_packages/`.
    The consumer depends on both copies by path. Copy a exports the memory symbols, and copy b serves explicit calls.
    The script checks that the link contains two instance ids with eight dispatch entries each, and it runs the executable.
+   A second row builds the same pair for aarch64: a consumer copy exports no kernel entry, and each copy emits its own instance-tagged kernel labels.
 `src/x86_64/cpuid.zig` tests the selection with synthetic CPUID values of the four fleet hosts and of other models.
 
 ## Harness
@@ -523,7 +525,7 @@ The first table is the state after the review fixes, merged with main 8d43448 (`
 | `zig build test` | 318 of 318 steps, 36 of 36 unit tests |
 | `bench-fastmem` `.text`, main 8d43448 and P7, `-Drev=cmp` | identical for sapphirerapids, graniterapids, znver4, znver5, and x86_64_v3 |
 | Codegen probe `.text`, main 8d43448 and P7 | identical for the same five CPUs |
-| `test-export-packages` | both hook fixtures fail to compile; two instances link and run (`x86_64_v3` under qemu) |
+| `test-export-packages` | both hook fixtures fail to compile; two instances link and run (`x86_64_v3` under qemu, `aarch64`/`neoverse_v3` for the kernel labels) |
 | Harness | 232 passed, 11 skipped |
 
 The earlier evidence, before the review fixes:

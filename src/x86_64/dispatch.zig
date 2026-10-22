@@ -36,7 +36,7 @@ pub const enabled = builtin.cpu.arch == .x86_64 and
 /// per package instance (build.zig `instanceId`), so that two fastmem
 /// packages in one link do not collide.
 pub const symbol_prefix = "fastmem_x86_" ++
-    (if (@hasDecl(options, "x86_instance")) options.x86_instance else "none") ++ "_";
+    (if (@hasDecl(options, "instance")) options.instance else "none") ++ "_";
 
 const tail: std.builtin.CallModifier = if (builtin.zig_backend == .stage2_llvm)
     .always_tail

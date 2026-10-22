@@ -78,6 +78,23 @@ This holds for the executable probes and the shared-library probes.
 LLD can convert hidden global symbols to local symbols in the final image.
 The relocatable-object tests check that each original definition is `GLOBAL HIDDEN`, not `WEAK`.
 
+### Kernel symbols
+
+The aarch64 kernels hold their entries in inline assembly.
+The inline layer also enters the copy kernel at a mid label for sizes above 64 bytes.
+All modules of one binary share one assembler label namespace, because Zig compiles them into one object.
+Two fastmem package copies in one link would therefore define the same labels.
+
+The package instance id (`instanceId` in `build.zig`) prefixes every local kernel label (`src/aarch64/instance.zig`).
+Each copy emits its own kernel bytes.
+A content-hash mismatch then costs duplicated bytes, not a link error.
+
+The hidden entry symbols `fastmem_sve_*` and `fastmem_advsimd_*` exist only in the kernel-bytes pin.
+That pin sets the `fastmem_options.export_kernels` flag.
+A consumer copy does not set the flag and exports no kernel symbol.
+`exportSymbols()` stays the only export site for a consumer.
+On x86_64, the dispatch symbols already carry the instance id (`docs/slop/runtime-dispatch.md`).
+
 ## Scope and limits
 
 The API accepts aarch64 and x86_64 ELF targets with the LLVM backend.
@@ -190,7 +207,7 @@ The binary matrix covers these cases:
 - Original aarch64 instruction bytes and fallback kernels without module-level intrinsic suppression.
 - Generic aarch64, Neoverse V1/V2/V3, x86_64 baseline, and x86_64_v3.
 - An `x86_64-dispatch` row: x86_64 baseline with runtime dispatch, in every link mode above.
-- Two fastmem package copies in one baseline link, and the absence of the dispatch test hook from the public module (`test-export-packages`).
+- Two fastmem package copies in one link: x86_64 baseline for the dispatch instances, and aarch64 for the instance-tagged kernel labels. The dispatch test hook stays out of the public module (`test-export-packages`).
 
 The libc-free consumer tests execute every length from 0 through 8192 bytes.
 They check copy, fill, and both move directions against byte-level expectations.

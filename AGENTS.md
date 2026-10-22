@@ -26,8 +26,9 @@ README and the guide; keep it there.
   builds without AVX2 (`docs/slop/runtime-dispatch.md`). `check_dispatch.py`
   and `run_dispatch.py` are its gate (`zig build test-dispatch`).
 - `src/aarch64/`: ports of Arm Optimized Routines (SVE and AdvSIMD) as
-  global asm, plus `small.zig` (the inline small classes) and `tuning.zig`
-  (the per-model small-path table).
+  global asm, plus `small.zig` (the inline small classes), `tuning.zig`
+  (the per-model small-path table), and `instance.zig` (the package
+  instance tag in every asm label).
 - `src/memcpy.zig`, `memmove.zig`, `forward.zig`, `common.zig`,
   `generic.zig`: the generic Zig fallback for targets without a dedicated
   kernel (other architectures, and the `generic` dispatch level on x86_64).

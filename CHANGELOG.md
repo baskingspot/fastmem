@@ -15,3 +15,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The guard-page correctness suite and the per-target codegen gates.
 - The benchmark fleet under `bench/` and `infra/`, and the measurement
   record.
+
+### Fixed
+
+- Two fastmem package copies in one link no longer collide on the hidden
+  aarch64 kernel symbols. A consumer copy exports no kernel entry, and every
+  kernel assembly label carries the package instance id.

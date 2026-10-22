@@ -11,10 +11,12 @@
 // Port notes (the only intentional differences from upstream):
 // - Naked Zig functions and @export replace the ENTRY, ALIAS, and END macros.
 //   The compiler emits symbol types, sizes, and hidden visibility.
-//   Register aliases become architectural names. Local labels retain unique
-//   prefixes because all inline assembly shares one label namespace.
-// - The symbol is renamed __memset_aarch64_sve -> fastmem_sve_set and
-//   given .hidden visibility.
+//   Register aliases become architectural names. `instance.zig` tags every
+//   local label with the package instance id, because all inline assembly of
+//   one binary shares one label namespace (two fastmem copies in one link).
+// - The symbol is renamed __memset_aarch64_sve -> fastmem_sve_set and given
+//   .hidden visibility. It exports only when fastmem_options.export_kernels
+//   is set; the kernel-bytes pin sets it.
 // - SKIP_ZVA_CHECK is not defined, so the runtime DCZID_EL0 check on
 //   the ZVA path is kept, as upstream writes it without the define.
 // - Immediate expressions are written #( ...); upstream writes them
@@ -22,7 +24,8 @@
 // - The GNU_PROPERTY note (BTI/PAC marking of the linked binary) is
 //   omitted: it is link-level metadata, and no other object in a Zig
 //   link carries it. The BTI landing pad (`hint 34`) is kept.
-// - Exports require SVE and ELF at comptime. Other builds do not emit these instructions.
+// - Exports require SVE and ELF at comptime and the export_kernels option.
+//   Other builds do not emit these instructions.
 // - The below-16 path is selected at comptime per CPU model
 //   (src/aarch64/tuning.zig): the upstream predicated SVE store (.sve),
 //   or the advsimd store tree (.neon) inverted so that 1..3 bytes fall
@@ -30,6 +33,8 @@
 //   sizes). Everything at 16 and above is upstream in both variants.
 
 const builtin = @import("builtin");
+const options = @import("fastmem_options");
+const instance = @import("instance.zig");
 const tuning = @import("tuning.zig");
 
 const enabled = builtin.cpu.arch == .aarch64 and
@@ -194,11 +199,14 @@ const body = switch (tuning.set_small) {
 } ++ tail_common;
 
 comptime {
-    if (enabled) @export(&setEntry, .{ .name = "fastmem_sve_set", .visibility = .hidden });
+    if (enabled and options.export_kernels)
+        @export(&setEntry, .{ .name = "fastmem_sve_set", .visibility = .hidden });
 }
 
 pub fn setEntry() align(64) callconv(.naked) void {
-    asm volatile (".arch armv8-a+sve\n    hint 34\n" ++ body ::: .{ .memory = true });
+    asm volatile (instance.instanced(
+            ".arch armv8-a+sve\n    hint 34\n" ++ body,
+        ) ::: .{ .memory = true });
 }
 
 pub const fastmem_sve_set: *const fn ([*]u8, u8, usize) callconv(.c) void = @ptrCast(&setEntry);

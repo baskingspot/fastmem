@@ -84,6 +84,7 @@ const Fastmem = struct {
                 .test_hooks = access == .test_hooks,
                 .instance = instance,
                 .resolver_trap = false,
+                .export_kernels = false,
             });
         };
         return fm;
@@ -525,6 +526,9 @@ const Variant = struct {
     instance: []const u8,
     /// Only the resolver-trap fixture of test-dispatch sets it.
     resolver_trap: bool,
+    /// Export the hidden aarch64 kernel entries. Only the kernel-bytes pin
+    /// sets it: a consumer copy must export nothing (src/export/check.py).
+    export_kernels: bool,
 };
 
 fn tuningOptions(b: *std.Build, t: Tuning, v: Variant) *std.Build.Step.Options {
@@ -547,10 +551,13 @@ fn tuningOptions(b: *std.Build, t: Tuning, v: Variant) *std.Build.Step.Options {
     options.addOption(bool, "x86_dispatch", v.dispatch);
     // True only in fastmem's own test modules: it enables dispatch.force.
     options.addOption(bool, "x86_test_hooks", v.test_hooks);
-    // The dispatch symbol names contain it (Fastmem.instance).
-    options.addOption([]const u8, "x86_instance", v.instance);
+    // Per package instance. The x86 dispatch symbol names and the aarch64
+    // inline-layer label contain it (Fastmem.instance).
+    options.addOption([]const u8, "instance", v.instance);
     // True only in the resolver-trap fixture: every resolver executes ud2.
     options.addOption(bool, "x86_resolver_trap", v.resolver_trap);
+    // True only in the kernel-bytes pin (addArmByteTests).
+    options.addOption(bool, "export_kernels", v.export_kernels);
     return options;
 }
 
@@ -686,6 +693,7 @@ fn addDispatchTests(
         .test_hooks = false,
         .instance = fm.instance,
         .resolver_trap = true,
+        .export_kernels = false,
     }));
     for (fm.levelObjects(musl)) |obj| trap_module.addObject(obj);
     const trap_exe = b.addExecutable(.{
@@ -718,10 +726,11 @@ fn addDispatchTests(
     return step;
 }
 
-/// The dispatch test hook stays out of the public module, and two package
-/// instances link together (docs/slop/runtime-dispatch.md).
+/// The test hook stays out of the public module, and two package
+/// instances link together (docs/slop/runtime-dispatch.md,
+/// docs/slop/export-layer.md).
 fn addPackageTests(b: *std.Build, fm: *Fastmem, public: *std.Build.Module) *std.Build.Step {
-    const step = b.step("test-export-packages", "Check the package boundary of the x86 dispatch");
+    const step = b.step("test-export-packages", "Check the package boundary of both architectures");
     const baseline = b.resolveTargetQuery(std.Target.Query.parse(.{
         .arch_os_abi = "x86_64-linux-gnu",
         .cpu_features = "x86_64",
@@ -755,6 +764,17 @@ fn addPackageTests(b: *std.Build, fm: *Fastmem, public: *std.Build.Module) *std.
     two.addArg(b.cache_root.join(b.allocator, &.{"fastmem-two-packages"}) catch @panic("OOM"));
     two.setCwd(b.path("."));
     step.dependOn(&two.step);
+    // The aarch64 kernel asm has one label namespace per object; the
+    // instance id keeps two package copies apart. Neoverse V3 emits the
+    // neon mid block, so both copies show a mid-entry label.
+    const arm = b.addSystemCommand(&.{"python3"});
+    arm.addFileArg(b.path("src/export/two_packages.py"));
+    arm.addArg(b.graph.zig_exe);
+    arm.addArg(b.pathFromRoot("."));
+    arm.addArg(b.cache_root.join(b.allocator, &.{"fastmem-two-packages-arm"}) catch @panic("OOM"));
+    arm.addArgs(&.{ "--target", "aarch64-linux-musl", "--cpu", "neoverse_v3" });
+    arm.setCwd(b.path("."));
+    step.dependOn(&arm.step);
     return step;
 }
 
@@ -1010,6 +1030,10 @@ fn addArmByteTests(b: *std.Build) *std.Build.Step {
     inline for (.{ "copy", "move", "set" }) |op| {
         defaults.addOption([]const u8, "small_" ++ op, "auto");
     }
+    // The check reads the hidden entry symbols from the object.
+    defaults.addOption([]const u8, "mid_entry", "auto");
+    defaults.addOption([]const u8, "instance", "audit");
+    defaults.addOption(bool, "export_kernels", true);
     for ([_][]const u8{ "generic", "neoverse_v1", "neoverse_v2", "neoverse_v3" }) |cpu| {
         const target = b.resolveTargetQuery(std.Target.Query.parse(.{
             .arch_os_abi = "aarch64-linux-gnu",

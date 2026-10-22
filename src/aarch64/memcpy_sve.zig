@@ -13,11 +13,13 @@
 // Port notes (the only intentional differences from upstream):
 // - Naked Zig functions and @export replace the ENTRY, ALIAS, and END macros.
 //   The compiler emits symbol types, sizes, and hidden visibility.
-//   Register aliases become architectural names. Local labels retain unique
-//   prefixes because all inline assembly shares one label namespace.
+//   Register aliases become architectural names. `instance.zig` tags every
+//   local label with the package instance id, because all inline assembly of
+//   one binary shares one label namespace (two fastmem copies in one link).
 // - Symbols are renamed __memcpy_aarch64_sve -> fastmem_sve_copy and
-//   __memmove_aarch64_sve -> fastmem_sve_move and given .hidden
-//   visibility.
+//   __memmove_aarch64_sve -> fastmem_sve_move and given .hidden visibility.
+//   The entries export only when fastmem_options.export_kernels is set; the
+//   kernel-bytes pin sets it. A consumer copy exports nothing.
 // - The GNU_PROPERTY note (BTI/PAC marking of the linked binary) is
 //   omitted: it is link-level metadata, and no other object in a Zig
 //   link carries it. The BTI landing pad (`hint 34`) is kept.
@@ -25,7 +27,8 @@
 //   bare. Both forms assemble to the same bytes.
 // - Each entry retains 64-byte alignment. The instruction bytes match the
 //   earlier assembly kernels, including padding after a separate move head.
-// - Exports require SVE and ELF at comptime. Other builds do not emit these instructions.
+// - Exports require SVE and ELF at comptime and the export_kernels option.
+//   Other builds do not emit these instructions.
 // - The small-size paths (count <= 64) are selected at comptime per CPU
 //   model (src/aarch64/tuning.zig), separately for the copy and move
 //   entries. .sve is the upstream predicated pair for 0..2*VL and the
@@ -49,6 +52,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const options = @import("fastmem_options");
+const instance = @import("instance.zig");
 const tuning = @import("tuning.zig");
 
 const enabled = builtin.cpu.arch == .aarch64 and
@@ -488,18 +493,29 @@ const mid_neon_v3_entry =
     \\
 ;
 
-const mid_neon_pair =
+// The > 64 byte entry used by the inline layer (tuning.mid_entry). The
+// instance id makes the label unique: every module of one binary shares
+// one assembler label namespace. A consumer copy keeps the label local;
+// the kernel-bytes pin exports it (fastmem_options.export_kernels).
+const gt64_name = "fastmem_sve_copy_gt64_" ++ instance.id;
+const gt64_directives = if (options.export_kernels)
+    "    .globl  " ++ gt64_name ++ "\n    .hidden " ++ gt64_name ++ "\n"
+else
+    "";
+
+const mid_neon_pair_head =
     \\
     \\    .p2align 4
     \\    // Entry for the inline layer's > 64 byte calls (tuning.mid_entry):
     \\    // skips the head's small-size dispatch, which the inline gate has
     \\    // already decided. Valid for any n > 64 and any overlap: the
     \\    // 33..128 blocks load before they store, and > 128 still routes
-    \\    // to the long path's backward/forward dispatch. Hidden label
-    \\    // only; no instruction bytes added.
-    \\    .globl  fastmem_sve_copy_gt64
-    \\    .hidden fastmem_sve_copy_gt64
-    \\fastmem_sve_copy_gt64:
+    \\    // to the long path's backward/forward dispatch. Label only; no
+    \\    // instruction bytes added.
+;
+
+const mid_neon_pair = mid_neon_pair_head ++ "\n" ++ gt64_directives ++
+    gt64_name ++ ":\n" ++
     \\.Lfm_sve_cpy_gt32:
     \\    cmp    x2, 128
     \\    b.hi    .Lfm_sve_cpy_long
@@ -688,7 +704,7 @@ const long_path =
 // Both entries share the mid and long blocks. The shared section keeps
 // the split move head adjacent to copy, including its original padding.
 comptime {
-    if (enabled) {
+    if (enabled and options.export_kernels) {
         @export(&move_entry, .{ .name = "fastmem_sve_move", .visibility = .hidden });
         @export(&copyEntry, .{ .name = "fastmem_sve_copy", .visibility = .hidden });
     }
@@ -697,15 +713,15 @@ comptime {
 pub const move_entry = if (aliased) copyEntry else splitMoveEntry;
 
 fn splitMoveEntry() align(64) linksection(".text.fastmem_sve_pair") callconv(.naked) void {
-    asm volatile (".arch armv8-a+sve\n    hint 34\n" ++
-            head(move_v, "mov") ++ ".p2align 6\n" ::: .{ .memory = true });
+    asm volatile (instance.instanced(".arch armv8-a+sve\n    hint 34\n" ++
+            head(move_v, "mov") ++ ".p2align 6\n") ::: .{ .memory = true });
 }
 
 pub fn copyEntry() align(64) linksection(".text.fastmem_sve_pair") callconv(.naked) void {
-    asm volatile (".arch armv8-a+sve\n    hint 34\n" ++ head(copy_v, "cpy") ++
+    asm volatile (instance.instanced(".arch armv8-a+sve\n    hint 34\n" ++ head(copy_v, "cpy") ++
             (if (v3_copy_fallthrough) mid_neon else (if (need_sve_mid) mid_sve else "")) ++
             (if (v3_copy_fallthrough) "" else if (need_neon_mid) mid_neon else "") ++
-            long_path ::: .{ .memory = true });
+            long_path) ::: .{ .memory = true });
 }
 
 pub const fastmem_sve_copy: *const fn (
@@ -722,4 +738,21 @@ pub const fastmem_sve_move: *const fn (
 // Present only when the neon mid block is emitted (some head is not
 // .sve). root.zig references it behind `has_gt64_entry` at comptime.
 pub const has_gt64_entry = enabled and need_neon_mid;
-pub extern fn fastmem_sve_copy_gt64(d: [*]u8, s: [*]const u8, n: usize) callconv(.c) void;
+comptime {
+    // The mid label lives inside copyEntry. A hidden keepalive symbol keeps
+    // the entry in the object when an inline-layer call is its only
+    // reference; a bare `&copyEntry` does not force codegen. The name
+    // carries the instance id, so two package copies do not collide. The
+    // kernel-bytes pin references the entry by name instead.
+    if (has_gt64_entry and tuning.mid_entry and !options.export_kernels) {
+        @export(&copyEntry, .{
+            .name = "copy_entry_keep_" ++ instance.id,
+            .visibility = .hidden,
+        });
+    }
+}
+const Gt64Fn = *const fn ([*]u8, [*]const u8, usize) callconv(.c) void;
+pub const fastmem_sve_copy_gt64: Gt64Fn = if (has_gt64_entry)
+    @extern(Gt64Fn, .{ .name = gt64_name })
+else
+    undefined;
