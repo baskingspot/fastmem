@@ -39,13 +39,13 @@ README and the guide; keep it there.
 - `src/bench_fastmem.zig`: the measurement binary (JSONL schema v3).
   `src/libc_probe.zig`: the glibc resolution probe.
 - `src/asm_probe.zig`: C-ABI wrappers for `zig build asm`.
-- `bench/`: the Python (uv) harness. `ec2bench/` is the generic fleet
-  library. `fastmem_bench/` builds, runs, and analyzes. `bench.toml`
-  configures both. `plot_scorecard.py` renders the light and dark benchmark
-  charts; `just plot` regenerates both.
-- `infra/`: OpenTofu. `modules/bench-iam` and `modules/bench-base`, root
-  stacks `iam/` (a human applies it) and `base/` (the agent applies it).
-  `infra/README.md` is the runbook.
+- `bench/`: the Python (uv) adapter. `fastmem_bench/` builds, runs, and
+  analyzes; `ec2bench` is a pinned dependency from `baskingspot/infra`.
+  `bench.toml` configures both. `plot_scorecard.py` renders the light and
+  dark benchmark charts; `just plot` regenerates both.
+- The fleet's Terraform, the generic harness, and the runbook live in
+  `baskingspot/infra`. A human applies a stack there. This repository has no
+  Terraform.
 - `docs/content/`: the site guide. `docs/static/`: the marks and the
   benchmark chart. `wrangler.jsonc` deploys the site as
   `baskingspot-dev-fastmem`.
@@ -86,8 +86,8 @@ README and the guide; keep it there.
 
 `bench.toml` is the source of truth. The x86 `baseline_cpu` is `x86_64`:
 its builds dispatch at run time to the level named by `zig_cpu`. All
-`.xlarge`, us-west-2, account
-396684171460 ("playground"), profile `fastmem-bench`.
+`.xlarge` in us-west-2. The profile is `project.profile` in `bench.toml`;
+the key is the one the shared infra stack writes.
 
 | Target | CPU                       | x86 variant / aarch64 small path |
 | ------ | ------------------------- | -------------------------------- |

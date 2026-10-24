@@ -21,15 +21,6 @@ test-export:
 test-guard:
     zig build test-guard -Doptimize=ReleaseFast
 
-[doc("The OpenTofu modules: format check, then the offline mock-provider tests")]
-[group("test")]
-test-infra:
-    tofu fmt -check -recursive infra
-    tofu -chdir=infra/modules/bench-iam init -backend=false -input=false
-    tofu -chdir=infra/modules/bench-iam test
-    tofu -chdir=infra/modules/bench-base init -backend=false -input=false
-    tofu -chdir=infra/modules/bench-base test
-
 [doc("x86 codegen gates for all fleet CPU models (runs on any host)")]
 [group("test")]
 codegen-x86:
@@ -61,7 +52,7 @@ fmt:
 
 [doc("Everything the main CI job runs: tests, lint, codegen, the bench harness checks, the OpenTofu modules, and the site")]
 [group("ci")]
-ci: test lint codegen-x86 bench-check test-infra doc
+ci: test lint codegen-x86 bench-check doc
 
 [doc("Build the site into zig-out/site/fastmem/ from docs/")]
 [group("docs")]
@@ -121,7 +112,8 @@ diff-asm A B:
 clean:
     rm -rf zig-out .zig-cache
 
-# Benchmark fleet: the bench/ harness (docs/bench-design.md, infra/README.md).
+# Benchmark fleet: the bench/ adapter (docs/bench-design.md). The fleet and the
+# generic harness live in baskingspot/infra.
 # Every fleet command runs as the fastmem-bench IAM user.
 export AWS_PROFILE := env("AWS_PROFILE", "fastmem-bench")
 
@@ -160,8 +152,3 @@ bench-run *ARGS:
 bench-check:
     cd bench && uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run ty check
 
-[doc("Apply the durable base (security group, key pair, launch templates)")]
-[group("fleet")]
-bench-base:
-    tofu -chdir=infra/base init -input=false
-    tofu -chdir=infra/base apply

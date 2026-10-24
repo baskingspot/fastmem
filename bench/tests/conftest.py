@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from ec2bench.config import Config
 
 
@@ -90,7 +89,8 @@ META_V2 = {
 
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
-    (tmp_path / "bench.toml").write_text("""
+    (tmp_path / "bench.pem").write_text("dummy key")
+    (tmp_path / "bench.toml").write_text(f"""
 [project]
 name = "test-bench"
 region = "us-west-2"
@@ -99,6 +99,7 @@ adapter = "test_adapter"
 remote_dir = "/root/bench"
 image_version = "1"
 extra_key = "ignored"
+ssh_key = "{tmp_path / "bench.pem"}"
 [fleet]
 default_ttl = "4h"
 [targets.intel]

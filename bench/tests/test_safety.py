@@ -7,12 +7,12 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
-
 from ec2bench.box import Box, RemoteError
 from ec2bench.cli import ensure_up
 from ec2bench.config import Config
 from ec2bench.facts import collect
 from ec2bench.isolation import isolate
+
 from fastmem_bench.build import Source, build_all
 from tests.test_protocol import FakeBox, setup
 
@@ -32,10 +32,10 @@ def test_generic_config(config: Config) -> None:
     loaded = Config.load(config.root)
     assert loaded.results_dir == config.root / "bench-results"
     assert loaded.cache_dir == config.root / ".bench-cache"
-    loaded.project.update(results_dir="out", cache_dir="cache", tofu_dir="infra/custom")
+    loaded.project.update(results_dir="out", cache_dir="cache", ssh_key="~/keys/x.pem")
     assert loaded.results_dir == config.root / "out"
     assert loaded.cache_dir == config.root / "cache"
-    assert loaded.tofu_dir == config.root / "infra/custom"
+    assert loaded.ssh_key == Path.home() / "keys" / "x.pem"
 
 
 def test_ready_failure_terminates_only_failed_box(

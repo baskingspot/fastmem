@@ -36,7 +36,7 @@
               [
                 # Bench harness (bench/): a uv project on Python 3.14. uv owns
                 # the Python deps; nix owns the interpreter and system tools.
-                python314
+                python315
                 uv
                 # Fleet: the AWS CLI for ad-hoc inspection, ssh/rsync for box
                 # transport.
@@ -58,7 +58,7 @@
 
             # Keep uv on the nix interpreter; never download a Python.
             env = {
-              UV_PYTHON = "${pkgs.python314}/bin/python3";
+              UV_PYTHON = "${pkgs.python315}/bin/python3";
               UV_PYTHON_DOWNLOADS = "never";
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
             };

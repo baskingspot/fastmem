@@ -52,7 +52,7 @@ exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 just ci
 ```
 
-`nix develop` provides the toolchain. `just --list` shows the recipes. `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet is described in `infra/README.md`.
+`nix develop` provides the toolchain. `just --list` shows the recipes. `just ci` runs what CI runs. `just test-guard` runs the full correctness matrix on this host. The benchmark fleet and its harness live in `baskingspot/infra`; this repository keeps the fastmem adapter.
 
 ## License
 

@@ -2,9 +2,10 @@
 
 This document is the contract for the benchmark system. It replaces
 `infra/bench.nu`, the OrbStack target, and the per-box build flow.
-Three components implement it: the infrastructure (`infra/`), the
-harness (`bench/`), and the measurement binary (`src/bench_fastmem.zig`).
-Each component owns its own files. The interfaces between them are
+Three components implement it: the shared infrastructure and generic
+harness (`baskingspot/infra`), the fastmem adapter (`bench/`), and the
+measurement binary (`src/bench_fastmem.zig`). Each component owns its own
+files. The interfaces between them are
 fixed here. Change an interface in this file first, then in the code.
 
 ## Goals
@@ -68,17 +69,8 @@ The target table is data in `bench.toml`, not code.
 
 ```
 bench.toml                  project config for the harness
-infra/
-  modules/bench-iam/        OpenTofu module: IAM user, policy, reaper Lambda
-  modules/bench-base/       OpenTofu module: security group, key pair,
-                            launch templates, box NixOS configuration
-  iam/                      root stack for bench-iam. A human applies it.
-  base/                     root stack for bench-base. The bench user applies it.
-  base/image.nix            project NixOS module (fastmem packages)
-  README.md                 runbook
 bench/
-  pyproject.toml            uv project
-  ec2bench/                 generic fleet library and CLI. No fastmem code.
+  pyproject.toml            uv project; pins the shared ec2bench tag
   fastmem_bench/            fastmem adapter: build, run protocol, analysis
   tests/
 src/bench_c.h               C surface of bench-fastmem (translate-c input)
@@ -87,198 +79,40 @@ src/probe_c.h               C surface of libc-probe (translate-c input)
 src/libc_probe.zig          libc symbol probe
 ```
 
-`infra/modules/` and `bench/ec2bench/` are the copyable pattern. They
-version as one unit: the Python assumes the tags and the outputs that the
-modules produce. They stay in this repository until a second project
-(handoff) adopts them. Then they move to their own repository, and
-projects pin a tag (`git::...//modules/bench-base?ref=v0.1` and a uv git
-dependency).
+The shared modules and the harness version as one unit, in
+`baskingspot/infra`. The Python assumes the tags and the outputs that the
+modules produce, so the harness and the templates ship from the same tag.
 
 The root stacks pin provider versions and commit their lock files. The
 modules declare only minimum versions.
 
-## AWS account
+## Shared infrastructure and harness
 
-- Account `396684171460` ("playground"), region `us-west-2`.
-- The human bootstrap profile is `playground-ops` (SSO).
-- The agent profile is `fastmem-bench`. It holds static keys for the
-  IAM user `fastmem-bench`.
-- Use the default VPC and its default subnets. Do not create a VPC.
-
-## Tags
-
-Every resource that the system creates has these tags:
-
-| Tag | Value |
-|---|---|
-| `Project` | `fastmem-bench` (from `bench.toml`, `project.name`) |
-| `ManagedBy` | `tofu` or `ec2bench` |
-
-Every instance also has these tags:
-
-| Tag | Value |
-|---|---|
-| `Name` | `<project>-<target>` |
-| `Target` | target name, for example `c8g` |
-| `ExpiresAt` | UTC time in RFC 3339 format, for example `2026-09-24T04:00:00Z` |
-| `Owner` | free text, for example `agent` or `matt` |
-
-A RunInstances request tags the instance, its volumes, and its network
-interfaces. Tag keys must have exactly these spellings: the IAM policy
-rejects other keys, in any case. The IAM policy uses the `Project` tag as
-its security boundary.
-
-## Lifetime guarantee
-
-Two mechanisms end a box. They are independent.
-
-1. The TTL guard on the box (fast path). A systemd timer reads `ExpiresAt`
-   from instance metadata every minute and runs `poweroff`. The launch
-   template sets shutdown behavior to `terminate`. The guard falls back to
-   12 hours after boot when the tag is missing or malformed.
-2. The reaper (the guarantee). A Lambda in the bench-iam module runs every
-   5 minutes, outside every box. It terminates each project instance that
-   is stopped, has no valid `ExpiresAt`, is past `ExpiresAt`, or is older
-   than 24 hours. It deletes orphaned project volumes and network
-   interfaces.
-
-The agent can apply `infra/base`, so it can change launch templates, and
-it can write any `ExpiresAt` value. The guest guard therefore does not
-bind the agent. The reaper does: its role, schedule, and limits belong to
-the human-applied stack. The worst case is one allowed instance for 24
-hours. The harness caps a TTL at `fleet.max_ttl` (12 hours).
-
-## infra/modules/bench-iam
-
-- An IAM user with one customer managed policy and one access key.
-  `infra/iam/write-credentials.sh` writes the key to the profile.
-- The policy allows every `ec2:Describe*` and `ec2:Get*` action.
-- `ec2:RunInstances` requires: a project launch template, the NixOS AMI
-  from that template, the `Project` and `ExpiresAt` request tags, an
-  allowed instance family (`c7i`, `c8i`, `c7a`, `c8a`, `c7g`, `c8g`,
-  `c9g`, all sizes, no variants), on-demand market, default tenancy, gp3
-  volumes up to 100 GiB, 3000 IOPS and 125 MiB/s, and project tags on new
-  network interfaces.
-- Tag writes need canonical tag keys. Nobody can delete `Project` or
-  `ExpiresAt`, in any case.
-- `ec2:TerminateInstances` only on project instances. No Stop or Start:
-  a stopped instance escapes the guest guard.
-- Create, change, and delete of the security group, key pair, and launch
-  templates that bench-base needs, scoped by the project tag.
-- Every action outside `us-west-2` is denied. No IAM, S3, Lambda, or
-  other service. No `iam:PassRole`.
-- The reaper Lambda, its role, its log group, and its schedule.
-  `infra/README.md` describes the checks after an apply.
-
-## infra/modules/bench-base
-
-- A security group `<project>-ssh` in the default VPC, with inbound SSH.
-- An ED25519 key pair. The private key goes to `var.key_file`, mode
-  `0600`, gitignored.
-- One launch template per architecture (`<project>-x86_64`,
-  `<project>-arm64`): a pinned AMI, shutdown behavior `terminate`, IMDSv2
-  with instance metadata tags, a gp3 root volume, tag specifications for
-  instances, volumes, and network interfaces, and no instance type.
-- The user_data is `image.nix.tftpl`, rendered with `var.image_version`
-  and the project module `var.nixos_module`. The template owns the fleet
-  contract: the TTL guard, `programs.nix-ld` (the shipped binaries use the
-  standard interpreter paths), ASLR off, perf sysctls, masked noisy
-  services, and `/etc/bench-image`. The project module adds packages.
-- Outputs: `launch_template_ids` (by architecture), `key_file`,
-  `security_group_id`. The harness reads them with `tofu output -json`.
-
-## bench.toml
+The fleet's Terraform and the generic `ec2bench` harness live in
+`baskingspot/infra`. This repository pins a tag of it:
 
 ```toml
-[project]
-name = "fastmem-bench"
-region = "us-west-2"
-profile = "fastmem-bench"
-adapter = "fastmem_bench"
-remote_dir = "/root/bench"
-image_version = "1"          # must match /etc/bench-image on the box
-# Optional, with these defaults (they make ec2bench layout-independent):
-tofu_dir = "infra/base"
-key_output = "key_file"
-templates_output = "launch_template_ids"
-ssh_user = "root"
-results_dir = "bench-results"
-cache_dir = ".bench-cache"
-minimum_effect = 0.0         # adapter: minimum fractional effect for marks
-
-[fleet]
-default_ttl = "4h"
-max_ttl = "12h"              # up and extend refuse a longer TTL
-default_owner = "agent"
-
-[targets.c7i]
-instance_type = "c7i.xlarge"
-arch = "x86_64"
-zig_target = "x86_64-linux-gnu"
-zig_cpu = "sapphirerapids"   # -Dcpu of the G1-G4 builds
-baseline_cpu = "x86_64_v3"   # -Dcpu of the G6 builds (bench run --cpu baseline)
-# ... one table for each target in the Targets section
+[tool.uv.sources]
+ec2bench = { git = "https://github.com/baskingspot/infra", rev = "v0.1.0", subdirectory = "harness" }
 ```
 
-`baseline_cpu` is `x86_64_v3` on the x86 targets and `generic` on the
-aarch64 targets (plan, G6). Without the key, the adapter uses the same
-values from the architecture.
+`baskingspot/infra/harness/README.md` is the harness contract: the
+`bench.toml` keys, launch template discovery, the SSH key path, the `Fleet`
+and `Box` API, and the safety rules. `baskingspot/infra/docs/runbook.md` is
+the operator runbook: the IAM user and policy, the reaper, the TTL guard,
+and every apply. Neither is repeated here.
 
-`ec2bench` reads `[project]`, `[fleet]`, and the `instance_type` and
-`arch` fields of `[targets.*]`. The adapter reads the other fields.
-`ec2bench` ignores keys that it does not know.
+The facts this document depends on:
 
-## bench/ec2bench (generic)
+- Region `us-west-2`, the default VPC, and the instance families in
+  `bench.toml`.
+- One launch template per architecture, named `<project>-<arch>` and
+  tagged with the project.
+- The private key at `~/.ssh/<project>.pem`.
+- The tags `Project`, `ManagedBy`, `Name`, `Target`, `ExpiresAt`, and
+  `Owner`; the TTL guard on the box and the 24-hour reaper.
 
-`ec2bench` contains no fastmem code. It depends on `boto3`, `rich`, and
-`click`. It uses the system `ssh` and `rsync` with SSH connection
-multiplexing (`ControlMaster`).
-
-Commands (entry point `bench`, run as `uv run bench <command>`):
-
-| Command | Behavior |
-|---|---|
-| `up <target>... [--ttl 4h] [--size xlarge]` | Reap first. Launch the missing instances from the launch templates, in parallel. Wait until SSH works and `/etc/bench-image` matches. Terminate a box that does not become ready. |
-| `ls` | Show the instances with the `Project` tag: target, type, state, IP, time until `ExpiresAt`. |
-| `down <target>... \| --all` | Terminate instances. |
-| `extend <target>... --ttl 2h` | Set `ExpiresAt` to now plus the TTL. |
-| `reap` | Terminate every instance with the `Project` tag whose `ExpiresAt` is in the past or absent. |
-| `ssh <target> [cmd...]` | Open a shell, or run one command. |
-| `facts <target>...` | Collect host facts and print them. |
-| `analyze <run-dir>` | Analyze saved raw rounds again, without AWS, SSH, or builds (adapter command). |
-
-Library responsibilities:
-
-- `Config`: parse `bench.toml`.
-- `Fleet`: find instances by tag, launch, terminate, extend, reap.
-  One running instance for each target at a time.
-- `Box`: SSH command execution with timeout and streamed output, file
-  upload, and file download for one instance.
-- `parallel`: run one function across boxes at the same time, with a
-  `rich` live display for each box. One failed box does not stop the
-  others. The caller receives a result or an error for each box.
-- Host facts: collect generic facts and cache them by instance ID under
-  `bench-results/.facts/<instance-id>.json`. Generic facts are:
-  `/proc/cpuinfo` model and flags, `lscpu -J`, CPU topology from sysfs,
-  `uname -a`, the kernel command line, the IMDS instance identity document,
-  `/etc/bench-image`, and the NixOS version. Each probe is optional: a
-  failure goes into the facts record and never stops a run.
-- CPU isolation: a function that selects one benchmark CPU for each box.
-  It selects the last physical core. On SMT hosts, it also leaves the
-  SMT sibling idle. It restricts `system.slice`, `user.slice`, and
-  `init.scope` to the other CPUs with `systemctl set-property --runtime`
-  `AllowedCPUs=`. It returns the CPU number. A directory in `/run` is an
-  atomic claim, and an active `ec2bench-run-*` unit means "box busy".
-  `run_isolated` executes a command as a transient `ec2bench-run-<name>`
-  unit in `bench.slice` on that CPU (the SSH session itself stays in the
-  restricted `user.slice`). `stop_isolated` stops a group of these units
-  after an interrupt. The old state is restored on exit.
-- Plugin hook: an adapter registers more `click` commands on the `bench`
-  group. `ec2bench` finds the adapter from `bench.toml`
-  (`[project] adapter = "fastmem_bench"`).
-- Run directories: `bench-results/<run-id>/`. The run ID is
-  `<UTC yyyymmddTHHMMSSZ>-<label>`. `manifest.json` holds the git state,
-  the command line, the targets, and the instance IDs.
+The adapter's contract with the harness is the next section.
 
 ## bench/fastmem_bench (adapter)
 
