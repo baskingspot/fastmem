@@ -150,4 +150,4 @@ bench-run *ARGS:
 [doc("Harness checks: tests, lint, format, types")]
 [group("fleet")]
 bench-check:
-    cd bench && uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run ty check
+    cd bench && uv lock --check && uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run ty check
