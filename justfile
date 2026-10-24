@@ -151,4 +151,3 @@ bench-run *ARGS:
 [group("fleet")]
 bench-check:
     cd bench && uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run ty check
-
