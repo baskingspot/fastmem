@@ -5,9 +5,9 @@ from unittest.mock import Mock
 
 import pytest
 from click.testing import CliRunner
-
 from ec2bench.config import Config
 from ec2bench.parallel import Outcome
+
 from fastmem_bench.build import Build, Source
 from fastmem_bench.runner import run
 from tests.conftest import CODEGEN, PROBE, measurement

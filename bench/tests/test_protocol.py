@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from ec2bench.config import Config
+
 from fastmem_bench.analysis import analyze
 from fastmem_bench.build import Build, Source
 from fastmem_bench.protocol import execute, orders

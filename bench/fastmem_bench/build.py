@@ -16,6 +16,7 @@ from typing import Any
 from ec2bench.config import Config
 from ec2bench.parallel import Outcome, parallel
 from ec2bench.runs import git
+
 from fastmem_bench.codegen import inspect as inspect_codegen
 from fastmem_bench.jsonl import Codegen
 

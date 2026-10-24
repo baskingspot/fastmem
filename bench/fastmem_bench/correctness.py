@@ -8,15 +8,15 @@ from pathlib import Path
 from typing import Any
 
 import click
-from rich.console import Console
-from rich.table import Table
-
 from ec2bench.box import Box
 from ec2bench.cli import box_for, ensure_up
 from ec2bench.config import Config
 from ec2bench.fleet import Fleet, tags
 from ec2bench.parallel import parallel
 from ec2bench.runs import create_run, write_manifest
+from rich.console import Console
+from rich.table import Table
+
 from fastmem_bench.build import baseline_cpu, expected_dispatch, source_hash
 
 

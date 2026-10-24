@@ -7,9 +7,9 @@ from unittest.mock import Mock
 import click
 import pytest
 from click.testing import CliRunner
-
 from ec2bench.config import Config
 from ec2bench.parallel import Outcome
+
 from fastmem_bench import correctness as c
 
 

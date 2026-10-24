@@ -13,6 +13,7 @@ from ec2bench.config import Config
 from ec2bench.facts import collect
 from ec2bench.isolation import isolate, run_isolated, stop_isolated
 from ec2bench.parallel import progress
+
 from fastmem_bench.build import Build
 from fastmem_bench.jsonl import parse
 
