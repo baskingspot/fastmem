@@ -114,8 +114,8 @@ clean:
 
 # Benchmark fleet: the bench/ adapter (docs/bench-design.md). The fleet and the
 # generic harness live in baskingspot/infra.
-# Every fleet command runs as the fastmem-bench IAM user.
-export AWS_PROFILE := env("AWS_PROFILE", "fastmem-bench")
+# Every fleet command runs as the baskingspot-bench role.
+export AWS_PROFILE := env("AWS_PROFILE", "baskingspot-bench")
 
 [doc("Run any harness command (e.g. just b ls, just b up c8g c7i --ttl 2h, just b analyze <run-dir>)")]
 [group("fleet")]

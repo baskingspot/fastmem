@@ -1,7 +1,7 @@
 [project]
-name = "fastmem-bench"
+name = "baskingspot-bench"
 region = "us-west-2"
-profile = "fastmem-bench"
+profile = "baskingspot-bench"
 adapter = "fastmem_bench"
 remote_dir = "/root/bench"
 image_version = "1"
