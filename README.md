@@ -25,7 +25,7 @@ Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byt
 ## Install
 
 ```sh
-zig fetch --save git+https://github.com/baskingspot/fastmem
+zig fetch --save https://baskingspot.dev/fastmem/v0.1.0.tar.gz
 ```
 
 Add the module in `build.zig`:
