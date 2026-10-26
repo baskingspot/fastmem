@@ -7,23 +7,19 @@
 
 Fast memcpy, memmove, and memset for Zig.
 
-Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byte loop, and its `memcpy` and `memmove` are slower than glibc on most CPUs. fastmem replaces them with kernels that are tuned per CPU model and measured against glibc and compiler-rt on seven EC2 targets.
+Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byte loop, and its `memcpy` and `memmove` are slower than glibc on most CPUs. fastmem replaces them with kernels that are tuned per CPU model and measured against glibc and compiler-rt on seven EC2 targets. It imports only `std` and has no libc dependency.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/static/benchmark-dark.svg">
   <img src="docs/static/benchmark.svg" alt="fastmem speedup over compiler-rt by size tier: memset reaches 16x the median and up to 25x above 16 KiB; copy and move stay near 1x to 2x" width="700" height="336">
 </picture>
 
-- MIT license (`LICENSE`). The aarch64 kernels are ports of Arm Optimized Routines (MIT). `THIRD_PARTY.md` lists every port.
-- Zig 0.16.0. No libc dependency.
-- Correctness: a guard-page suite of about 28 million cases per build runs on the target hardware in ReleaseFast, ReleaseSafe, and Debug.
-
 ## What is in it
 
 - [Kernels](https://baskingspot.dev/fastmem/#kernels): AVX-512 and AVX2 kernels with per-model tuning, Arm Optimized Routines on aarch64, and a generic fallback.
 - [Runtime dispatch](https://baskingspot.dev/fastmem/#runtime-dispatch): one x86_64 Linux baseline binary selects AVX-512, AVX2, or generic kernels from CPUID.
 - [Correctness](https://baskingspot.dev/fastmem/#correctness): the guard-page suite, the per-model codegen gates, and the export-layer binary checks.
-- [Results](https://baskingspot.dev/fastmem/#results): the scorecard against glibc and compiler-rt on all seven targets.
+- [Performance](https://baskingspot.dev/fastmem/#performance): the scorecard against glibc and compiler-rt on all seven targets.
 - [Limits](https://baskingspot.dev/fastmem/#limits): the export layer is ELF only and needs the LLVM backend; other targets get the generic vector fallback.
 
 ## Install
@@ -32,18 +28,19 @@ Zig code gets these operations from compiler-rt. compiler-rt's `memset` is a byt
 zig fetch --save git+https://github.com/baskingspot/fastmem
 ```
 
-Then add the module:
+Add the module in `build.zig`:
 
 ```zig
 const fastmem = b.dependency("fastmem", .{ .target = target, .optimize = optimize });
 exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 ```
 
+fastmem builds with Zig 0.16 only.
+
 ## Documentation
 
 - The [guide](https://baskingspot.dev/fastmem/) covers the kernels, runtime dispatch, correctness, and the measured results.
 - The [API reference](https://baskingspot.dev/fastmem/api/) documents every public symbol.
-
 - [`AGENTS.md`](AGENTS.md) has the working notes for the repository.
 
 ## Work on it
@@ -56,7 +53,7 @@ just ci
 
 ## License
 
-MIT. See `LICENSE`. The logo files in `docs/static/` are baskingspot marks and are not covered by it. See `docs/static/LICENSE`.
+MIT. See `LICENSE`. The aarch64 kernels are ports of Arm Optimized Routines; `THIRD_PARTY.md` lists every port and its terms. The logo files in `docs/static/` are baskingspot marks and are not covered by it. See `docs/static/LICENSE`.
 
 ## How it's made
 

@@ -1,8 +1,9 @@
-//! Fast memory operations using native SIMD vectors.
+//! Fast memcpy, memmove, and memset for Zig.
 //!
-//! `memcpy` and `memmove` now live in separate modules so their policy
-//! decisions can diverge cleanly, while still sharing the low-level
-//! load/store primitives and the overlap-safe forward kernel.
+//! The kernels are SIMD vector code selected per target and CPU model.
+//! `memcpy` and `memmove` live in separate modules so their policy decisions
+//! can diverge cleanly, while still sharing the low-level load/store
+//! primitives and the overlap-safe forward kernel.
 
 const std = @import("std");
 const testing = std.testing;

@@ -70,8 +70,8 @@ README and the guide; keep it there.
   binary. It must pass before a commit.
 - `just lint`: ziglint, Zig, Nix, Markdown, the workflows, and justfile
   formatting. Run it before you call Zig work done.
-- `just ci`: everything the main CI job runs, including `bench-check` and
-  `test-infra`. `just test-guard` is the separate guard-page lane.
+- `just ci`: everything the main CI job runs, including `bench-check`.
+  `just test-guard` is the separate guard-page lane.
 - `just doc`: build the site into `zig-out/site/fastmem/`.
 - `just plot`: regenerate the light and dark benchmark charts from the scorecard.
 - `just test-guard`: the guard-page matrix on this host.

@@ -1,6 +1,6 @@
 # fastmem: fast memcpy, memmove, and memset for Zig. README.md is the user
-# overview; AGENTS.md holds the working notes; docs/bench-design.md describes
-# the benchmark system.
+# overview; AGENTS.md holds the working notes; docs/slop/bench-design.md
+# describes the benchmark system.
 
 [private]
 default:
@@ -11,7 +11,7 @@ default:
 test:
     zig build test
 
-[doc("The export-layer binary checks alone (docs/export-layer.md)")]
+[doc("The export-layer binary checks alone (docs/slop/export-layer.md)")]
 [group("test")]
 test-export:
     zig build test-export

@@ -13,8 +13,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The opt-in `exportSymbols()` layer: strong, hidden `memcpy`, `memmove`, and
   `memset` definitions for ELF programs and shared libraries.
 - The guard-page correctness suite and the per-target codegen gates.
-- The benchmark fleet under `bench/` and `infra/`, and the measurement
-  record.
+- The benchmark adapter under `bench/`, with the fleet and harness in
+  `baskingspot/infra`, and the measurement record.
 
 ### Fixed
 
