@@ -311,7 +311,7 @@ fn headHybrid(comptime p: []const u8) []const u8 {
 // fleet A/Bs it on V1 (branch fleet3/armh-move-neon32,
 // docs/slop/results/armh-graviton-gaps.md).
 fn headHybridN32(comptime p: []const u8) []const u8 {
-    const pair = if (comptime std.mem.eql(u8, p, "mov"))
+    const pair = if (comptime mem.eql(u8, p, "mov"))
         // Move flavor: one exact transfer at 16 bytes, like the neon
         // move head.
         \\    ldr    q0, [x1]

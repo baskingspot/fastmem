@@ -2,12 +2,13 @@
 //! JSON line. src/x86_64/run_dispatch.py runs it under several qemu CPU
 //! models and checks the level.
 const std = @import("std");
+const Io = std.Io;
 const fastmem = @import("fastmem");
 const linux = std.os.linux;
 
 pub fn main() void {
     var buffer: [512]u8 = undefined;
-    var writer: std.Io.Writer = .fixed(&buffer);
+    var writer: Io.Writer = .fixed(&buffer);
     const info = fastmem.dispatch.detect().?;
     var src: [300]u8 = @splat(0x5a);
     var dst: [300]u8 = @splat(0);

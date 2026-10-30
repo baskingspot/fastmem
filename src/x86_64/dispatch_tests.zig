@@ -3,6 +3,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const testing = std.testing;
+const print = std.debug.print;
 const fastmem = @import("../root.zig");
 const dispatch = fastmem.dispatch;
 const Level = dispatch.Level;
@@ -34,7 +35,7 @@ fn eachLevel(comptime check: fn () anyerror!void) !usize {
         dispatch.force(l) catch continue;
         try testing.expectEqual(l, dispatch.level().?);
         check() catch |err| {
-            std.debug.print("dispatch level {s} failed\n", .{@tagName(l)});
+            print("dispatch level {s} failed\n", .{@tagName(l)});
             return err;
         };
         count += 1;
