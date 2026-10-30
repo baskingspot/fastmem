@@ -7,53 +7,98 @@ const cpu = std.Target.x86.cpu;
 pub const available = builtin.cpu.arch == .x86_64 and builtin.cpu.has(.x86, .avx2);
 pub const avx512 = available and builtin.cpu.has(.x86, .avx512bw);
 pub const Tuning = struct {
-    vec: u32 = if (avx512) 64 else 32,
-    medium_vec: u32 = 64,
-    abi_alignment: u32 = 16,
-    medium_first: bool = false,
-    abi_move_max: u32 = 512,
-    rep_movsb_min: ?u64 = null,
+    vec: u32,
+    medium_vec: u32,
+    abi_alignment: u32,
+    medium_first: bool,
+    abi_move_max: u32,
+    rep_movsb_min: ?u64,
     // Null preserves the measured vector policy for every forward overlap.
-    rep_fwd_gap_min: ?u64 = null,
+    rep_fwd_gap_min: ?u64,
+    nt_min: ?u64,
+    fwd_source_min: ?u64,
+    copy_source_min: ?u64,
+    rep_stosb_min: ?u64,
+    memset_nt_min: ?u64,
+    alias_mask: u64,
+    rep_src_align_mask: u64,
+
+    /// The base row, before any per-model override.
+    pub const init: Tuning = .{
+        .vec = if (avx512) 64 else 32,
+        .medium_vec = 64,
+        .abi_alignment = 16,
+        .medium_first = false,
+        .abi_move_max = 512,
+        .rep_movsb_min = null,
+        .rep_fwd_gap_min = null,
+        .nt_min = null,
+        .fwd_source_min = null,
+        .copy_source_min = null,
+        .rep_stosb_min = null,
+        // Null keeps the measured temporal fill path.
+        .memset_nt_min = null,
+        .alias_mask = 0xf00,
+        .rep_src_align_mask = 0xe00,
+    };
+};
+
+/// The knobs a per-model row overrides; a null knob keeps `Tuning.init`.
+const Overrides = struct {
+    vec: ?u32 = null,
+    rep_movsb_min: ?u64 = null,
     nt_min: ?u64 = null,
     fwd_source_min: ?u64 = null,
     copy_source_min: ?u64 = null,
     rep_stosb_min: ?u64 = null,
     memset_nt_min: ?u64 = null,
-    alias_mask: u64 = 0xf00,
-    rep_src_align_mask: u64 = 0xe00,
 };
 
+fn model(comptime overrides: Overrides) Tuning {
+    return .{
+        .vec = overrides.vec orelse Tuning.init.vec,
+        .medium_vec = Tuning.init.medium_vec,
+        .abi_alignment = Tuning.init.abi_alignment,
+        .medium_first = Tuning.init.medium_first,
+        .abi_move_max = Tuning.init.abi_move_max,
+        .rep_movsb_min = overrides.rep_movsb_min orelse Tuning.init.rep_movsb_min,
+        .rep_fwd_gap_min = Tuning.init.rep_fwd_gap_min,
+        .nt_min = overrides.nt_min orelse Tuning.init.nt_min,
+        .fwd_source_min = overrides.fwd_source_min orelse Tuning.init.fwd_source_min,
+        .copy_source_min = overrides.copy_source_min orelse Tuning.init.copy_source_min,
+        .rep_stosb_min = overrides.rep_stosb_min orelse Tuning.init.rep_stosb_min,
+        .memset_nt_min = overrides.memset_nt_min orelse Tuning.init.memset_nt_min,
+        .alias_mask = Tuning.init.alias_mask,
+        .rep_src_align_mask = Tuning.init.rep_src_align_mask,
+    };
+}
+
 // Cache thresholds describe the fleet instance sizes, not every CPU with this model.
-const defaults: Tuning = if (builtin.cpu.model == &cpu.sapphirerapids) .{
+const defaults: Tuning = if (builtin.cpu.model == &cpu.sapphirerapids) model(.{
     .rep_movsb_min = 16384,
     .nt_min = 0x3580000,
     .rep_stosb_min = 2048,
     .memset_nt_min = 0x3580000,
-} else if (builtin.cpu.model == &cpu.graniterapids) .{
+}) else if (builtin.cpu.model == &cpu.graniterapids) model(.{
     .rep_movsb_min = 16384,
     .nt_min = 0xf100000,
     .rep_stosb_min = 2048,
     .memset_nt_min = 0xf100000,
-} else if (builtin.cpu.model == &cpu.znver4) .{
+}) else if (builtin.cpu.model == &cpu.znver4) model(.{
     // Zen 4 retains temporal stores at exactly 12 MiB. Neither AMD model uses REP.
     .nt_min = 0xc00001,
-    .fwd_source_min = null,
-    .copy_source_min = null,
-} else if (builtin.cpu.model == &cpu.znver5) .{
+}) else if (builtin.cpu.model == &cpu.znver5) model(.{
     // Temporal stores win at 16 MiB. NT stores win at 64 MiB.
     // The composite tests a 32 MiB threshold. See docs/slop/results/p3-x86f.md.
     .nt_min = 0x2000000,
     .fwd_source_min = 0xc00001,
     .copy_source_min = 65536,
-    // Keep the measured temporal path through 16 MiB. Fleet acceptance is pending.
-    .memset_nt_min = null,
-} else if (builtin.cpu.model == &cpu.skylake_avx512 or
+}) else if (builtin.cpu.model == &cpu.skylake_avx512 or
     builtin.cpu.model == &cpu.cascadelake or
     builtin.cpu.model == &cpu.icelake_client or
-    builtin.cpu.model == &cpu.icelake_server) .{
+    builtin.cpu.model == &cpu.icelake_server) model(.{
     .vec = 32,
-} else .{};
+}) else Tuning.init;
 
 // The independent two-page NT candidate is confined to Sapphire Rapids.
 pub const nt_copy_pages = builtin.cpu.model == &cpu.sapphirerapids and avx512;

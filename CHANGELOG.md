@@ -6,6 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `x86_64/tuning.zig`'s `Tuning` requires every field; a table row starts from
+  `Tuning.init` and overrides the knobs its model changes.
+
 ## [0.1.0] - 2026-10-26
 
 ### Added
