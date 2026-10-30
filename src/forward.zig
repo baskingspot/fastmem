@@ -3,6 +3,9 @@ const assert = std.debug.assert;
 
 const common = @import("common.zig");
 
+/// Comptime tuning of the forward loop, one entry per call site (memcpy.zig,
+/// memmove.zig).
+// ast-grep-ignore: public-struct-field-default -- comptime config: call sites override one knob
 pub const Options = struct {
     tight_loop: bool = true,
     medium_straight_line: bool = false,
