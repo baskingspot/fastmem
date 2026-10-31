@@ -33,7 +33,7 @@ The [API reference](api/) documents every public symbol.
 Add the package to `build.zig.zon`:
 
 ```sh
-zig fetch --save https://baskingspot.dev/fastmem/v0.1.0.tar.gz
+zig fetch --save https://baskingspot.dev/fastmem/v0.1.1.tar.gz
 ```
 
 fastmem builds with Zig 0.16 only.
