@@ -36,7 +36,7 @@ Add the package to `build.zig.zon`:
 zig fetch --save https://baskingspot.dev/fastmem/v0.1.1.tar.gz
 ```
 
-fastmem builds with Zig 0.16 only.
+fastmem builds with Zig 0.16 and 0.17.
 
 ## Import it
 

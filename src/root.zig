@@ -447,7 +447,7 @@ test "copy: all size classes" {
         var src: [1024]u8 = undefined;
         for (&src, 0..) |*b, i| b.* = @truncate(i);
 
-        var dest: [1024]u8 = .{0} ** 1024;
+        var dest: [1024]u8 = @splat(0);
         copy(u8, dest[0..len], src[0..len]);
 
         try testing.expectEqualSlices(u8, src[0..len], dest[0..len]);
@@ -460,7 +460,7 @@ test "copy: typed elements" {
         var src: [64]u32 = undefined;
         for (&src, 0..) |*value, i| value.* = @intCast(i * 17 + 3);
 
-        var dest: [64]u32 = .{0} ** 64;
+        var dest: [64]u32 = @splat(0);
         copy(u32, dest[0..len], src[0..len]);
 
         try testing.expectEqualSlices(u32, src[0..len], dest[0..len]);
@@ -591,7 +591,7 @@ test "abi: libc-signature entry points return dest and do the work" {
     for (&src, 0..) |*b, i| b.* = @truncate(i *% 31 +% 7);
 
     for ([_]usize{ 0, 1, 7, 32, 65, 128, 200, 511 }) |len| {
-        var dest: [600]u8 = .{0} ** 600;
+        var dest: [600]u8 = @splat(0);
         const r = abi.memcpy(@ptrCast(&dest), @ptrCast(&src), len);
         try testing.expectEqual(@as(?*anyopaque, @ptrCast(&dest)), r);
         try testing.expectEqualSlices(u8, src[0..len], dest[0..len]);
@@ -745,7 +745,7 @@ test "move: non-overlapping regions" {
         var src: [4096]u8 = undefined;
         for (&src, 0..) |*b, i| b.* = @truncate(i *% 41);
 
-        var dest: [4096]u8 = .{0xAA} ** 4096;
+        var dest: [4096]u8 = @splat(0xAA);
         move(u8, dest[0..len], src[0..len]);
         try testing.expectEqualSlices(u8, src[0..len], dest[0..len]);
     }

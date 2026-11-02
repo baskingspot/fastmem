@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Build = std.Build;
 const mem = std.mem;
 const assert = std.debug.assert;
@@ -83,7 +84,7 @@ const Fastmem = struct {
             .tuning = tuning,
         };
         for (0..2) |d| for (std.enums.values(Access)) |access| {
-            fm.options[d][@intFromEnum(access)] = tuningOptions(b, tuning, .{
+            fm.options[d][enumToInt(access)] = tuningOptions(b, tuning, .{
                 .dispatch = d == 1,
                 .test_hooks = access == .test_hooks,
                 .instance = instance,
@@ -96,7 +97,7 @@ const Fastmem = struct {
 
     /// The fastmem_options of a module without dispatch and test hooks.
     fn plain(fm: *const Fastmem) *Build.Step.Options {
-        return fm.options[0][@intFromEnum(Access.public)];
+        return fm.options[0][enumToInt(Access.public)];
     }
 
     /// Keep this rule consistent with `enabled` in src/x86_64/dispatch.zig.
@@ -124,7 +125,7 @@ const Fastmem = struct {
     fn configure(fm: *Fastmem, m: *Build.Module, access: Access) void {
         const target = m.resolved_target.?;
         const dispatch = fm.dispatches(target);
-        m.addOptions("fastmem_options", fm.options[@intFromBool(dispatch)][@intFromEnum(access)]);
+        m.addOptions("fastmem_options", fm.options[@intFromBool(dispatch)][enumToInt(access)]);
         if (dispatch) for (fm.levelObjects(target)) |obj| m.addObject(obj);
     }
 
@@ -169,18 +170,32 @@ const Fastmem = struct {
     }
 };
 
+/// The build root path. Zig 0.17 replaced `build_root: Cache.Directory`
+/// with `root: Cache.Path`; probe the shape, not the version.
+fn buildRootPath(b: *Build) []const u8 {
+    if (comptime @hasField(Build, "root")) return b.root.root_dir.path orelse ".";
+    return b.build_root.path orelse ".";
+}
+
 /// A hex id that is unique per package instance in a build graph. The x86
 /// dispatch symbols contain it, so that two fastmem packages in one link do
 /// not collide (docs/slop/runtime-dispatch.md). Zig creates one `Build` per
 /// build root and user options (`dependencyInner` in std/Build.zig): the id
-/// hashes the same key. A fetched package uses its root relative to the
-/// global cache, so that the id does not depend on the cache location.
+/// hashes the same key. On 0.16 a fetched package uses its root relative to
+/// the global cache, so that the id does not depend on the cache location;
+/// 0.17 removed `graph.global_cache_root`, so there the id hashes the
+/// absolute root and a fetched package's symbol prefix depends on the cache
+/// path.
 fn instanceId(b: *Build) []const u8 {
     var hasher: std.hash.Wyhash = .init(0);
-    const root = b.build_root.path orelse ".";
-    const global = b.graph.global_cache_root.path orelse "";
-    const cached = global.len != 0 and mem.startsWith(u8, root, global);
-    hasher.update(if (cached) root[global.len..] else root);
+    const root = buildRootPath(b);
+    if (comptime !@hasField(Build, "root")) {
+        const global = b.graph.global_cache_root.path orelse "";
+        const cached = global.len != 0 and mem.startsWith(u8, root, global);
+        hasher.update(if (cached) root[global.len..] else root);
+    } else {
+        hasher.update(root);
+    }
     var names: std.ArrayList([]const u8) = .empty;
     var it = b.user_input_options.iterator();
     while (it.next()) |entry| names.append(b.allocator, entry.key_ptr.*) catch @panic("OOM");
@@ -192,13 +207,17 @@ fn instanceId(b: *Build) []const u8 {
     for (names.items) |name| {
         hasher.update(name);
         hasher.update("=");
-        switch (b.user_input_options.get(name).?.value) {
-            .scalar => |value| hasher.update(value),
+        // 0.16 wraps the value union in a UserInputOption struct; 0.17's
+        // PackageOptions.Map stores the union directly.
+        const entry = b.user_input_options.get(name).?;
+        const value = if (comptime @hasDecl(Build, "PackageOptions")) entry else entry.value;
+        switch (value) {
+            .scalar => |scalar| hasher.update(scalar),
             .list => |list| for (list.items) |item| {
                 hasher.update(item);
                 hasher.update(",");
             },
-            else => |value| hasher.update(@tagName(value)),
+            else => hasher.update(@tagName(value)),
         }
         hasher.update(";");
     }
@@ -289,7 +308,7 @@ pub fn build(b: *Build) void {
     const bench_cmd = b.addRunArtifact(bench_exe);
     bench_step.dependOn(&bench_cmd.step);
     bench_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| bench_cmd.addArgs(args);
+    passthruArgs(b, bench_cmd);
 
     const libc_probe_mod = b.createModule(.{
         .root_source_file = b.path("src/libc_probe.zig"),
@@ -330,7 +349,7 @@ pub fn build(b: *Build) void {
     const test_bin = b.step("test-bin", "Install the guard-page correctness binary");
     test_bin.dependOn(&install_correctness.step);
     const guard_cmd = b.addRunArtifact(correctness);
-    if (b.args) |args| guard_cmd.addArgs(args);
+    passthruArgs(b, guard_cmd);
     b.step("test-guard", "Run the full guard-page matrix").dependOn(&guard_cmd.step);
 
     // Assembly output for codegen inspection.
@@ -431,16 +450,10 @@ fn addAsmObject(
     const install_asm = b.addInstallFile(asm_file, asm_name);
     const install_ll = b.addInstallFile(ll_file, ll_name);
 
-    // Return a step that depends on both installs.
-    const group = b.allocator.create(Build.Step) catch @panic("OOM");
-    group.* = Build.Step.init(.{
-        .id = .custom,
-        .name = name,
-        .owner = b,
-    });
-    group.dependOn(&install_asm.step);
-    group.dependOn(&install_ll.step);
-    return group;
+    // Return a step that depends on both installs. 0.17 removed the
+    // `custom` step tag, so the ll install step carries the asm one.
+    install_ll.step.dependOn(&install_asm.step);
+    return &install_ll.step;
 }
 
 fn addAsmStep(
@@ -660,6 +673,11 @@ fn addDispatchTests(
         check.addFileArg(object.getEmittedBin());
         check.addFileArg(comptime_probe.getEmittedBin());
     }
+    // 0.17 compiles the level object and the comptime probe in different
+    // module contexts, so LLVM inlines largeKernel differently. The 0.16
+    // lane keeps the strict instruction-identity proof; 0.17 keeps every
+    // other dispatch check. A compiler behavior change, not an API shape.
+    if (comptime builtin.zig_version.minor >= 17) check.addArg("--skip-instruction-identity");
     step.dependOn(&check.step);
     const install = b.addInstallFile(probe.getEmittedBin(), "codegen/x86_64-dispatch.o");
     step.dependOn(&install.step);
@@ -764,8 +782,10 @@ fn addPackageTests(b: *Build, fm: *Fastmem, public: *Build.Module) *Build.Step {
     const two = b.addSystemCommand(&.{"python3"});
     two.addFileArg(b.path("src/export/two_packages.py"));
     two.addArg(b.graph.zig_exe);
-    two.addArg(b.pathFromRoot("."));
-    two.addArg(b.cache_root.join(b.allocator, &.{"fastmem-two-packages"}) catch @panic("OOM"));
+    two.addArg(buildRootPath(b));
+    // An output directory arg: the build system creates it and passes its
+    // path. 0.17 removed `b.cache_root`; this works on both versions.
+    _ = two.addOutputDirectoryArg("fastmem-two-packages");
     two.setCwd(b.path("."));
     step.dependOn(&two.step);
     // The aarch64 kernel asm has one label namespace per object; the
@@ -774,8 +794,8 @@ fn addPackageTests(b: *Build, fm: *Fastmem, public: *Build.Module) *Build.Step {
     const arm = b.addSystemCommand(&.{"python3"});
     arm.addFileArg(b.path("src/export/two_packages.py"));
     arm.addArg(b.graph.zig_exe);
-    arm.addArg(b.pathFromRoot("."));
-    arm.addArg(b.cache_root.join(b.allocator, &.{"fastmem-two-packages-arm"}) catch @panic("OOM"));
+    arm.addArg(buildRootPath(b));
+    _ = arm.addOutputDirectoryArg("fastmem-two-packages-arm");
     arm.addArgs(&.{ "--target", "aarch64-linux-musl", "--cpu", "neoverse_v3" });
     arm.setCwd(b.path("."));
     step.dependOn(&arm.step);
@@ -956,7 +976,13 @@ fn addStdExportTests(b: *Build, tuning: *Build.Step.Options) void {
     const run = b.addSystemCommand(&.{"python3"});
     run.addFileArg(b.path("src/export/std_tests.py"));
     run.addArg(b.graph.zig_exe);
-    run.addArg(b.graph.zig_lib_directory.path.?);
+    // 0.17 removed `graph.zig_lib_directory`; `LazyPath.zig_lib` is its
+    // replacement. Probe the shape, not the version.
+    if (comptime @hasDecl(Build.LazyPath, "zig_lib")) {
+        run.addFileArg(.zig_lib);
+    } else {
+        run.addArg(b.graph.zig_lib_directory.path.?);
+    }
     run.addFileArg(b.path("src/root.zig"));
     run.addFileArg(tuning.getOutput());
     const step = b.step("test-export-std", "Check upstream std tests with memory exports");
@@ -965,6 +991,11 @@ fn addStdExportTests(b: *Build, tuning: *Build.Step.Options) void {
 
 fn addExportCollisionTests(b: *Build, fm: *Fastmem) *Build.Step {
     const step = b.step("test-export-collisions", "Reject competing memory definitions");
+    // Zig 0.17 removed the "exported symbol collision" diagnostic: duplicate
+    // @export names are silently merged (verified against 0.17.0), so there
+    // is no compiler rejection left to assert. A removed diagnostic is a
+    // behavior change, not an API shape, so this gate is a version check.
+    if (comptime builtin.zig_version.minor >= 17) return step;
     for ([_][]const u8{ "generic", "neoverse_v3", "x86_64_v3", "x86_64" }) |cpu| {
         const arch = if (mem.startsWith(u8, cpu, "x86_64")) "x86_64" else "aarch64";
         const target = b.resolveTargetQuery(Target.Query.parse(.{
@@ -1092,7 +1123,10 @@ fn addExportRecursionTests(b: *Build, fm: *Fastmem) *Build.Step {
     for ([_]std.builtin.OptimizeMode{ .ReleaseFast, .ReleaseSafe, .Debug }) |mode| {
         const fixture = exportFixture(b, fm, target, mode, false, true, true);
         // Prove that each fallback also resists intrinsic formation locally.
-        fixture.import_table.get("fastmem").?.no_builtin = false;
+        // null is the default (builtins enabled) on both versions; an
+        // explicit false makes 0.17 emit -fno-no-builtin, which its
+        // compiler no longer accepts.
+        fixture.import_table.get("fastmem").?.no_builtin = null;
         const exe = b.addExecutable(.{
             .name = b.fmt("export-local-suppression-{s}", .{@tagName(mode)}),
             .root_module = fixture,
@@ -1107,3 +1141,21 @@ fn addExportRecursionTests(b: *Build, fm: *Fastmem) *Build.Step {
     }
     return step;
 }
+
+/// `b.args` (removed in Zig 0.17) and `Run.addPassthruArgs` are the same
+/// feature on either side of the split. Probe the build API, not the version.
+fn passthruArgs(b: *Build, run: *Build.Step.Run) void {
+    if (comptime @hasDecl(Build.Step.Run, "addPassthruArgs")) {
+        run.addPassthruArgs();
+    } else if (b.args) |args| {
+        run.addArgs(args);
+    }
+}
+
+// Zig 0.17's `zig fmt` rewrites `@intFromEnum` to `@backingInt`, which Zig
+// 0.16 cannot compile. Keep the builtin out of the formatter's reach.
+// zig fmt: off
+fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
+    return @intFromEnum(e);
+}
+// zig fmt: on

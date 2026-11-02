@@ -13,6 +13,19 @@
 //! Concurrent first calls store the same values, so the race is benign; the
 //! atomics only make it defined.
 const std = @import("std");
+
+// Zig 0.17's `zig fmt` rewrites `@intFromEnum`/`@enumFromInt` to their
+// `@backingInt` forms, which Zig 0.16 cannot compile. Keep them out of the
+// formatter's reach.
+// zig fmt: off
+fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
+    return @intFromEnum(e);
+}
+fn enumFromInt(comptime E: type, raw: anytype) E {
+    return @enumFromInt(raw);
+}
+// zig fmt: on
+
 const builtin = @import("builtin");
 const options = @import("fastmem_options");
 const cpuid = @import("cpuid.zig");
@@ -314,14 +327,14 @@ fn install(l: Level) void {
             @atomicStore(SetFn, &set_fn, k.set, .monotonic);
         },
     }
-    @atomicStore(u8, &selected, @intFromEnum(l), .monotonic);
+    @atomicStore(u8, &selected, enumToInt(l), .monotonic);
 }
 
 /// The selected level. The first use resolves it.
 pub fn level() Level {
     @disableIntrinsics();
     if (@atomicLoad(u8, &selected, .monotonic) == unresolved) install(detect().select());
-    return @enumFromInt(@atomicLoad(u8, &selected, .monotonic));
+    return enumFromInt(Level, @atomicLoad(u8, &selected, .monotonic));
 }
 
 /// The kernel implementation name of the selected level (the

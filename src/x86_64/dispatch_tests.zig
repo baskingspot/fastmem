@@ -130,7 +130,10 @@ test "dispatch: the detected level is supported and names its kernel" {
 test "dispatch: large forward and backward overlaps at every supported level" {
     // Above the AMD NT threshold (0xc00001) and the Intel REP threshold, below
     // the Intel NT thresholds: every large branch of every level applies.
-    if (builtin.mode == .Debug) return error.SkipZigTest;
+    // 0.17 renamed the Optimize fields to lowercase; probe the shape.
+    const Optimize = std.builtin.OptimizeMode;
+    const debug: Optimize = if (comptime @hasField(Optimize, "Debug")) .Debug else .debug;
+    if (builtin.mode == debug) return error.SkipZigTest;
     const n: usize = 0xc00001 + 4097;
     const gap: usize = 4096 + 17;
     const buffer = try testing.allocator.alloc(u8, n + gap);

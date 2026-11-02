@@ -35,7 +35,7 @@ const fastmem = b.dependency("fastmem", .{ .target = target, .optimize = optimiz
 exe.root_module.addImport("fastmem", fastmem.module("fastmem"));
 ```
 
-fastmem builds with Zig 0.16 only.
+fastmem builds with Zig 0.16 and 0.17.
 
 ## Documentation
 

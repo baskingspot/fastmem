@@ -34,7 +34,7 @@ fuzz LIMIT="10M":
 [doc("Lint Zig, Nix, Markdown, the workflows, and this justfile: ziglint, the ast-grep rules, zig fmt, nix fmt, oxfmt, actionlint, zizmor, and just --fmt")]
 [group("lint")]
 lint:
-    ziglint
+    ziglint-0-16
     baskingspot-lint src
     zig fmt --check src build.zig
     nix fmt -- --ci
@@ -51,9 +51,13 @@ fmt:
     oxfmt README.md AGENTS.md CHANGELOG.md THIRD_PARTY.md docs/content docs/static .github wrangler.jsonc docs/config.toml .oxfmtrc.jsonc
     just --fmt
 
-[doc("Everything the main CI job runs: tests, lint, codegen, the bench harness checks, the OpenTofu modules, and the site")]
+[doc("The per-version gate: unit tests and the x86 codegen checks. The bench harness codegen test runs in ci; on 0.16 aarch64 LLVM devirtualizes its C pointer, which is a harness shape, not a library defect")]
 [group("ci")]
-ci: test lint codegen-x86 bench-check doc
+check: test codegen-x86
+
+[doc("Everything the main CI job runs: the gate, lint, and the site")]
+[group("ci")]
+ci: check bench-check lint doc
 
 [doc("Build the site into zig-out/site/fastmem/ from docs/")]
 [group("docs")]

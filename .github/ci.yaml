@@ -1,3 +1,7 @@
+# The full gate runs on the default shell, the current stable Zig. The
+# compatibility lane has to compile and pass the suite on the previous one.
 jobs:
   - recipe: ci
+  - recipe: check
+    shell: zig-old
   - recipe: test-guard

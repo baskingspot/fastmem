@@ -2,6 +2,14 @@
 //! All timings use independent code. No external memory implementation is copied here.
 
 const std = @import("std");
+
+// Zig 0.17's `zig fmt` rewrites `@intFromEnum` to `@backingInt`, which Zig
+// 0.16 cannot compile. Keep the builtin out of the formatter's reach.
+// zig fmt: off
+fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
+    return @intFromEnum(e);
+}
+// zig fmt: on
 const Io = std.Io;
 const mem = std.mem;
 const fmt = std.fmt;
@@ -217,7 +225,7 @@ const PerfSystem = struct {
     fn open(config: linux.PERF.COUNT.HW, group: i32) usize {
         var attr: linux.perf_event_attr = .{};
         attr.type = .HARDWARE;
-        attr.config = @intFromEnum(config);
+        attr.config = enumToInt(config);
         attr.read_format = 8 | 1 | 2; // GROUP | TOTAL_TIME_ENABLED | TOTAL_TIME_RUNNING.
         attr.flags.disabled = group == -1;
         attr.flags.exclude_kernel = true;
@@ -360,7 +368,7 @@ test "perf retries without ref-cycles and identifies the failed event" {
             opens += 1;
             if (config == .CPU_CYCLES) assert(group == -1);
             if (config == .REF_CPU_CYCLES)
-                return @bitCast(-@as(isize, @intFromEnum(linux.E.NOENT)));
+                return @bitCast(-@as(isize, enumToInt(linux.E.NOENT)));
             return 100 + @as(usize, opens);
         }
         fn close(_: i32) void {
@@ -564,7 +572,7 @@ fn distribution(
     name: []const u8,
     weights: ?[]const Weight,
 ) !Case {
-    var prng = DefaultPrng.init(cfg.seed +% @as(u64, @intFromEnum(op)));
+    var prng = DefaultPrng.init(cfg.seed +% @as(u64, enumToInt(op)));
     const random = prng.random();
     const seq = try arena.create([seq_len]Entry);
     var sum: u64 = 0;
@@ -1155,7 +1163,7 @@ fn measureCase(
     const buffers = memory.buffers(case);
     var impls: ArrayList(Impl) = .empty;
     for (cfg.impls) |impl| if (case.accepts(impl)) try impls.append(arena, impl);
-    var iterations = [_]u64{0} ** 5;
+    var iterations: [5]u64 = @splat(0);
     const target = @as(u64, cfg.sample_ms) * time.ns_per_ms;
     for (impls.items, 0..) |impl, index| {
         if (cfg.warmup_ms != 0) {
@@ -1251,6 +1259,19 @@ fn dispatchMeta() DispatchMeta {
     };
 }
 
+/// Field names of a struct type. 0.17 split Type.Struct.fields into
+/// field_names/field_types; probe the shape, not the version.
+fn fieldNames(comptime T: type) []const [:0]const u8 {
+    const info = @typeInfo(T).@"struct";
+    if (comptime @hasField(@TypeOf(info), "field_names")) return info.field_names;
+    const names = comptime blk: {
+        var result: [info.fields.len][:0]const u8 = undefined;
+        for (info.fields, 0..) |field, i| result[i] = field.name;
+        break :blk result;
+    };
+    return &names;
+}
+
 /// A meta record with the dispatch object after its last field. Only a
 /// dispatch build emits it. A comptime-selected build emits the record
 /// without the field, with the same code as before P7, so that the code
@@ -1264,9 +1285,9 @@ fn WithDispatch(comptime Base: type) type {
 
         pub fn jsonStringify(self: Self, jw: *json.Stringify) json.Stringify.Error!void {
             try jw.beginObject();
-            inline for (@typeInfo(Base).@"struct".fields) |field| {
-                try jw.objectField(field.name);
-                try jw.write(@field(self.base, field.name));
+            inline for (comptime fieldNames(Base)) |name| {
+                try jw.objectField(name);
+                try jw.write(@field(self.base, name));
             }
             try jw.objectField("dispatch");
             try jw.write(self.dispatch);

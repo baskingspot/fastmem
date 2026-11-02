@@ -11,5 +11,6 @@ result = subprocess.run(
 )
 assert result.returncode != 0, "the recursive fixture passed the audit"
 assert "branch to memory entry:" in result.stderr, result.stderr
-assert "mem.replace__anon_" in result.stderr, result.stderr
+# 0.16 names it mem.replace__anon_N; 0.17 names it mem.replace__func_N.
+assert "mem.replace__" in result.stderr, result.stderr
 print("PASS compiled recursion fixture: std.mem.replace reaches a memory entry")

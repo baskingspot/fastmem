@@ -1,5 +1,13 @@
 //! Exhaustive Linux guard-page checks through the public API.
 const std = @import("std");
+
+// Zig 0.17's `zig fmt` rewrites `@intFromEnum` to `@backingInt`, which Zig
+// 0.16 cannot compile. Keep the builtin out of the formatter's reach.
+// zig fmt: off
+fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
+    return @intFromEnum(e);
+}
+// zig fmt: on
 const builtin = @import("builtin");
 const fastmem = @import("fastmem");
 const Guarded = @import("Guarded.zig");
@@ -72,9 +80,9 @@ fn summary(status: []const u8, detail: []const u8, elapsed_ns: i96) void {
         .status = status,
         .cases = count,
         .path_cases = .{
-            .runtime = path_counts[@intFromEnum(Path.runtime)],
-            .abi = path_counts[@intFromEnum(Path.abi)],
-            .constant = path_counts[@intFromEnum(Path.constant)],
+            .runtime = path_counts[enumToInt(Path.runtime)],
+            .abi = path_counts[enumToInt(Path.abi)],
+            .constant = path_counts[enumToInt(Path.constant)],
         },
         .elapsed_ns = elapsed_ns,
         .cpu = builtin.cpu.model.name,
@@ -176,7 +184,7 @@ fn check(comptime op: Op, src: Guarded, dst: Guarded, expected: []u8, c: Case) !
     paths.call(op, c.path, dest, source, c.value);
     if (!mem.eql(u8, expected, dst.bytes)) return error.DestinationOrCanaryMismatch;
     count += 1;
-    path_counts[@intFromEnum(c.path)] += 1;
+    path_counts[enumToInt(c.path)] += 1;
 }
 
 fn disjoint(
@@ -254,7 +262,7 @@ fn overlapOne(
     paths.call(.move, path, buf.bytes[dest..][0..len], buf.bytes[source..][0..len], 0);
     if (!mem.eql(u8, expected, buf.bytes)) return error.OverlapOrCanaryMismatch;
     count += 1;
-    path_counts[@intFromEnum(c.path)] += 1;
+    path_counts[enumToInt(c.path)] += 1;
 }
 
 fn overlap(

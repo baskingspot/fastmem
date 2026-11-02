@@ -57,11 +57,21 @@ README and the guide; keep it there.
 
 ## Toolchain
 
-- Zig 0.16.0 from the flake. Read `.pi/skills/zig/SKILL.md` before you
-  write Zig here. 0.15-era patterns are wrong in 0.16 in silent ways
+- Zig 0.16 and 0.17 from the flake. `nix develop` is 0.17 and
+  `nix develop .#zig-old` is 0.16. Read `.pi/skills/zig/SKILL.md` before you
+  write Zig here; 0.15-era patterns are wrong in both in silent ways
   (`std.Io`, `main(init)`, `testing.Smith`).
-- The flake is the environment. Add a missing tool to `flake.nix`; do not
-  install it globally.
+- Lint with `ziglint-0-16`, which targets the 0.16 std, so 0.17-only
+  deprecations do not fire while 0.16 is supported.
+- The 0.17 formatter rewrites `@intFromEnum`/`@enumFromInt` to their
+  `@backingInt` forms, which 0.16 cannot compile. Each file that needs them
+  carries a local `// zig fmt: off` helper: `build.zig`, `dispatch.zig`,
+  `bench_fastmem.zig`, and `tests/main.zig`. A shared `src/compat.zig` lands
+  in two modules and fails with `file exists in modules`.
+- 0.17 removed the configure-time global cache root. `instanceId` hashes the
+  absolute build root there, so a fetched package's exported symbol prefix
+  depends on the cache path. The two-packages export test still sees two
+  distinct ids. 0.16 keeps the cache-relative id.
 - Fuzz mode hits ziglang/zig#30655 in Debug. `just fuzz` uses ReleaseSafe.
 
 ## Commands
@@ -70,12 +80,21 @@ README and the guide; keep it there.
   binary. It must pass before a commit.
 - `just lint`: ziglint, Zig, Nix, Markdown, the workflows, and justfile
   formatting. Run it before you call Zig work done.
-- `just ci`: everything the main CI job runs, including `bench-check`.
-  `just test-guard` is the separate guard-page lane.
+- `just check`: the per-version gate, the unit tests and `codegen-x86`.
+  CI runs it on `zig-old`.
+- `just ci`: the default lane, `check` plus `bench-check`, lint, and the docs.
+  `bench-check`'s native binary tests skip unless `zig-out/bin/bench-fastmem`
+  exists; the C-pointer shape differs on 0.16 aarch64, so the native harness
+  tests stay in the 0.17 lane. `just test-guard` is the separate guard-page
+  lane.
 - `just doc`: build the site into `zig-out/site/fastmem/`.
 - `just plot`: regenerate the light and dark benchmark charts from the scorecard.
 - `just test-guard`: the guard-page matrix on this host.
 - `just codegen-x86`: the x86 codegen gate for every fleet CPU model.
+- `just bench-check`: the Python harness tests. The 0.17 lane skips the
+  level-vs-probe instruction identity: the same kernel source compiles in
+  different module contexts, so LLVM inlines `largeKernel` differently. The
+  0.16 lane keeps the strict identity proof.
 - `just bench-up`.
 - `just bench-test --optimize ReleaseFast --optimize ReleaseSafe --optimize Debug`.
 - `just bench-run --rev A --rev B --suite standard --rounds 5`.
