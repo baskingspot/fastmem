@@ -128,7 +128,7 @@ the key is the one the shared infra stack writes.
 - A kernel change that changes aarch64 bytes updates GOLDEN in
   `src/export/check_kernel_bytes.py` in the same commit, on purpose.
 - Fleet scripts tear down only the targets that they launched. `bench down
---all` stops every run on the fleet.
+  --all` stops every run on the fleet.
 - Correctness on a variant runs ReleaseFast. Debug and ReleaseSafe run on
   main, and once per merge wave with `bench test --all-modes`. The
   kernel-bytes pin (`zig build test-export`) proves a variant's kernels
