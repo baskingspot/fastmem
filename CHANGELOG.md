@@ -6,6 +6,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- fastmem builds with Zig 0.17 only. `minimum_zig_version` is `0.17.0`, the
+  `zig-old` shell and CI lane are gone, and the 0.16 compatibility shims are
+  removed. No public API or behavior changes.
+
 ## [0.2.0] - 2026-11-02
 
 ### Changed

@@ -19,14 +19,14 @@ from pathlib import Path
 
 from runtime import linux_runner
 
-# A Zig 0.16 fingerprint is the CRC-32 of the package name (high half) and a
+# A Zig fingerprint is the CRC-32 of the package name (high half) and a
 # nonzero id (low half).
 FINGERPRINT = hex(zlib.crc32(b"two_packages") << 32 | 0x7F0E5A11)
 ZON = """.{{
     .name = .two_packages,
     .version = "0.0.0",
     .fingerprint = {fingerprint},
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{{
         .fastmem_a = .{{ .path = "../a" }},
         .fastmem_b = .{{ .path = "../b" }},

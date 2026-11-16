@@ -174,10 +174,23 @@ def test_native_shared_indirect_loop_and_compiler_rt() -> None:
     # The C function pointer path remains indirect after ReleaseFast optimization.
     call_sites = disassembly.split("function(dst, src, len);")[1:]
     assert call_sites
+    sites = 0
     for site in call_sites:
-        # Clock callbacks also use indirect calls. Match only the memory operation site.
-        instructions = "\n".join(site.splitlines()[:6])
-        assert re.search(r"\bblr\s+x\d+|\bcallq?\s+\*", instructions)
+        # Zig 0.17 can annotate one statement twice and schedule the loop entry
+        # between the annotations, so the branch is not always the next few
+        # lines. Consider only the calls: clock callbacks run before the loop or
+        # after it, and the first call after the site is the memory operation.
+        # A devirtualized builtin would make it a direct call.
+        calls = [
+            line
+            for line in site.splitlines()
+            if re.match(r"^ [0-9a-f]+:", line) and re.search(r"\t(bl|blr|blx|callq?)\b", line)
+        ]
+        if not calls:
+            continue
+        sites += 1
+        assert re.search(r"\t(blr|blx)\b|\tcallq?\s+\*", calls[0]), calls[0]
+    assert sites
 
 
 def test_native_codegen_evidence_is_bound_to_the_executable(tmp_path: Path) -> None:

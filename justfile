@@ -26,7 +26,7 @@ test-guard:
 codegen-x86:
     zig build codegen-x86
 
-[doc("Fuzz with an iteration budget, for example `just fuzz 50M`. ReleaseSafe forces the LLVM backend, dodging the 0.16.0 self-hosted-backend bug in Debug fuzz mode (ziglang/zig#30655)")]
+[doc("Fuzz with an iteration budget, for example `just fuzz 50M`. ReleaseSafe forces the LLVM backend, dodging the self-hosted-backend bug in Debug fuzz mode (ziglang/zig#30655)")]
 [group("test")]
 fuzz LIMIT="10M":
     zig build test -Doptimize=ReleaseSafe --fuzz={{ LIMIT }}
@@ -34,7 +34,7 @@ fuzz LIMIT="10M":
 [doc("Lint Zig, Nix, Markdown, the workflows, and this justfile: ziglint, the ast-grep rules, zig fmt, nix fmt, oxfmt, actionlint, zizmor, and just --fmt")]
 [group("lint")]
 lint:
-    ziglint-0-16
+    ziglint-0-17
     baskingspot-lint src
     zig fmt --check src build.zig
     nix fmt -- --ci
@@ -51,7 +51,7 @@ fmt:
     oxfmt README.md AGENTS.md CHANGELOG.md THIRD_PARTY.md docs/content docs/static .github wrangler.jsonc docs/config.toml .oxfmtrc.jsonc
     just --fmt
 
-[doc("The per-version gate: unit tests and the x86 codegen checks. The bench harness codegen test runs in ci; on 0.16 aarch64 LLVM devirtualizes its C pointer, which is a harness shape, not a library defect")]
+[doc("The gate: unit tests and the x86 codegen checks")]
 [group("ci")]
 check: test codegen-x86
 

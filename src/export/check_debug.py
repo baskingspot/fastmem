@@ -1,4 +1,4 @@
-"""Pin Zig 0.16 self-hosted Debug lowering for runtime byte lengths."""
+"""Pin Zig 0.17 self-hosted Debug lowering for runtime byte lengths."""
 
 import re
 import subprocess

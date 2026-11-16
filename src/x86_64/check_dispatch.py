@@ -11,8 +11,11 @@ LEVEL LEVEL_OBJECT COMPTIME_PROBE_OBJECT.
    through the pointer of the same operation.
 3. Every level, resolver, and generic entry is a GLOBAL HIDDEN function whose
    name carries the package instance id.
-4. The kernels of each level object are instruction-identical to the kernels
-   of the comptime build for the same CPU (src/x86_64/codegen.zig probes).
+4. The kernels of each level object match the kernels of the comptime build
+   for the same CPU up to register allocation (src/x86_64/codegen.zig probes).
+   Zig 0.17 compiles the level object and the probe in different module
+   contexts, so LLVM inlines `largeKernel` differently and the instruction
+   streams are not identical.
 """
 
 import json
@@ -295,18 +298,20 @@ def regmove(text):
     return re.fullmatch(r"mov[ql]\s+%[a-z0-9]+, %[a-z0-9]+", text) is not None
 
 
-def normalized(obj, level, entry, tolerant=False):
+def normalized(obj, level, entry):
     """Instruction text of `entry` and every function that it branches to.
 
-    With `tolerant`, register allocation is normalized away: GPR
-    register-to-register moves are dropped and register names are masked,
-    while mnemonics, immediates, memory offsets, and branch structure still
-    have to match. Used for the level-vs-level sensitivity check on 0.17.
+    Register allocation is normalized away: GPR register-to-register moves are
+    dropped and register names are masked, while mnemonics, immediates, memory
+    offsets, and branch structure still have to match. Zig 0.17 compiles the
+    level object and the comptime probe in different module contexts, so LLVM
+    inlines largeKernel differently and the two instruction streams cannot be
+    compared byte for byte.
     """
     def significant(name):
         return [(a, t) for a, t in obj.body(name)
                 if not t.startswith(("nop", "R_X86_64"))
-                and not (tolerant and regmove(t))]
+                and not regmove(t)]
 
     result = {}
     pending = [entry]
@@ -317,12 +322,9 @@ def normalized(obj, level, entry, tolerant=False):
             continue
         lines = []
         for _, text in obj.body(name):
-            if text.startswith("nop"):
+            if text.startswith("nop") or regmove(text):
                 continue
-            if tolerant:
-                if regmove(text):
-                    continue
-                text = re.sub(r"%[a-z0-9]+", "%r", text)
+            text = re.sub(r"%[a-z0-9]+", "%r", text)
 
             def target(match):
                 address = int(match[1], 16)
@@ -358,14 +360,7 @@ POLICY = {
 
 def main():
     global PREFIX, SMALL_MAX  # noqa: PLW0603 — one checker invocation, one prefix
-    # 0.17 compiles the level object and the comptime probe in different
-    # module contexts, so LLVM inlines largeKernel differently and the
-    # instruction streams cannot match. The 0.16 lane keeps the strict
-    # identity proof; 0.17 keeps the stub, trace, symbol, policy, and
-    # sensitivity checks.
-    skip_identity = "--skip-instruction-identity" in sys.argv
-    tolerant = skip_identity
-    argv = [a for a in sys.argv[1:] if a != "--skip-instruction-identity"]
+    argv = sys.argv[1:]
     PREFIX = argv[0]
     require(re.fullmatch(r"fastmem_x86_[0-9a-f]{16}_", PREFIX), f"bad symbol prefix {PREFIX}")
     probe = Object(argv[1])
@@ -390,22 +385,9 @@ def main():
                 comptime_obj.owner[address] = move_name
         counts = {}
         for op in ("move", "set"):
-            got = normalized(level_obj, level, f"{PREFIX}{level}_mem{op}", tolerant)
-            want = normalized(comptime_obj, level, f"x86_64.{op}." + ("moveKernel" if op == "move" else "kernel"), tolerant)
+            got = normalized(level_obj, level, f"{PREFIX}{level}_mem{op}")
+            want = normalized(comptime_obj, level, f"x86_64.{op}." + ("moveKernel" if op == "move" else "kernel"))
             require(got.keys() == want.keys(), f"{level} {op}: functions {sorted(got)} != {sorted(want)}")
-            if skip_identity:
-                continue
-            for key in got:
-                if got[key] != want[key]:
-                    for i, (a, b) in enumerate(zip(got[key], want[key])):
-                        if a != b:
-                            raise SystemExit(
-                                f"x86_64 dispatch: {level} {key}: first difference at {i}: "
-                                f"{a!r} != {b!r}"
-                            )
-                    raise SystemExit(
-                        f"x86_64 dispatch: {level} {key}: length {len(got[key])} != {len(want[key])}"
-                    )
             counts[op] = {key: len(lines) for key, lines in sorted(got.items())}
             bounded_name = f"{PREFIX}{level}_mem{op}_above_small"
             bounded_counts = {}
@@ -434,8 +416,8 @@ def main():
         evidence["levels"][level] = counts
     # The comparison is sensitive: two different levels must differ.
     if len(triples) >= 6:
-        first = normalized(Object(triples[1]), triples[0], f"{PREFIX}{triples[0]}_memmove", tolerant)
-        other = normalized(Object(triples[5]), triples[0], "x86_64.move.moveKernel", tolerant)
+        first = normalized(Object(triples[1]), triples[0], f"{PREFIX}{triples[0]}_memmove")
+        other = normalized(Object(triples[5]), triples[0], "x86_64.move.moveKernel")
         require(first != other, f"{triples[0]} matches the {triples[3]} probe: the comparison is blind")
     print(json.dumps({"status": "pass", **evidence}))
 

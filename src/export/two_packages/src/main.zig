@@ -36,6 +36,6 @@ pub fn main() void {
         @tagName(a.dispatch.level().?)
     else
         a.impl.copy;
-    const line = std.fmt.bufPrint(&buffer, "{s}\n", .{label}) catch linux.exit(5);
+    const line = std.mem.print(&buffer, "{s}\n", .{label}) catch linux.exit(5);
     _ = linux.write(1, line.ptr, line.len);
 }

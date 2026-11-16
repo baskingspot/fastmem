@@ -3,13 +3,9 @@
 
 const std = @import("std");
 
-// Zig 0.17's `zig fmt` rewrites `@intFromEnum` to `@backingInt`, which Zig
-// 0.16 cannot compile. Keep the builtin out of the formatter's reach.
-// zig fmt: off
 fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
-    return @intFromEnum(e);
+    return @backingInt(e);
 }
-// zig fmt: on
 const Io = std.Io;
 const mem = std.mem;
 const fmt = std.fmt;
@@ -292,12 +288,12 @@ const Perf = struct {
     }
     fn errorMessage(self: Perf, buffer: []u8) ?[]const u8 {
         const first = self.warning orelse self.failure orelse return null;
-        const message = fmt.bufPrint(buffer, "{s}({s}): {s}", .{
+        const message = mem.print(buffer, "{s}({s}): {s}", .{
             first.action, first.event, first.detail,
         }) catch unreachable;
         if (self.warning != null) {
             if (self.failure) |failure| {
-                const rest = fmt.bufPrint(buffer[message.len..], ". {s}({s}): {s}", .{
+                const rest = mem.print(buffer[message.len..], ". {s}({s}): {s}", .{
                     failure.action, failure.event, failure.detail,
                 }) catch unreachable;
                 return buffer[0 .. message.len + rest.len];
@@ -533,7 +529,7 @@ fn addCase(arena: Allocator, cases: *ArrayList(Case), cfg: Config, case: Case) !
 }
 fn fixedCase(arena: Allocator, op: Op, profile: []const u8, size: u32) !Case {
     return .{
-        .id = try fmt.allocPrint(arena, "{s}/{s}/{d}", .{ @tagName(op), profile, size }),
+        .id = try arena.print("{s}/{s}/{d}", .{ @tagName(op), profile, size }),
         .op = op,
         .profile = profile,
         .size = @floatFromInt(size),
@@ -596,7 +592,7 @@ fn distribution(
         maximum = @max(maximum, size);
     }
     return .{
-        .id = try fmt.allocPrint(arena, "{s}/dist/{s}", .{ @tagName(op), name }),
+        .id = try arena.print("{s}/dist/{s}", .{ @tagName(op), name }),
         .op = op,
         .profile = "dist",
         .size = @as(f64, @floatFromInt(sum)) / seq_len,
@@ -658,7 +654,7 @@ fn buildCases(arena: Allocator, io: Io, cfg: Config) ![]Case {
             }
             for ([_]bool{ false, true }) |backward| {
                 for ([_]u32{ 1, chunk_bytes - 1, chunk_bytes + 1 }) |gap| {
-                    const profile = try fmt.allocPrint(arena, "{s}-gap{d}", .{
+                    const profile = try arena.print("{s}-gap{d}", .{
                         if (backward) "bwd" else "fwd", gap,
                     });
                     var case = try fixedCase(arena, .move, profile, size);
@@ -1259,17 +1255,23 @@ fn dispatchMeta() DispatchMeta {
     };
 }
 
-/// Field names of a struct type. 0.17 split Type.Struct.fields into
-/// field_names/field_types; probe the shape, not the version.
+/// Field names of a struct type. Zig 0.17 split `Type.Struct.fields` into
+/// `field_names` and `field_types`.
 fn fieldNames(comptime T: type) []const [:0]const u8 {
-    const info = @typeInfo(T).@"struct";
-    if (comptime @hasField(@TypeOf(info), "field_names")) return info.field_names;
-    const names = comptime blk: {
-        var result: [info.fields.len][:0]const u8 = undefined;
-        for (info.fields, 0..) |field, i| result[i] = field.name;
-        break :blk result;
+    return @typeInfo(T).@"struct".field_names;
+}
+
+/// The optimization-mode name that the JSON schema uses
+/// (`docs/slop/bench-design.md`, `bench/fastmem_bench/jsonl.py`). Zig 0.17
+/// renamed the `std.builtin.Optimize` tags to lowercase, so `@tagName` no
+/// longer produces it.
+fn optimizeName(mode: std.builtin.Optimize) []const u8 {
+    return switch (mode) {
+        .debug => "Debug",
+        .safe => "ReleaseSafe",
+        .fast => "ReleaseFast",
+        .small => "ReleaseSmall",
     };
-    return &names;
 }
 
 /// A meta record with the dispatch object after its last field. Only a
@@ -1330,7 +1332,7 @@ fn emitMeta(
         .target = @tagName(builtin.cpu.arch) ++ "-" ++
             @tagName(builtin.os.tag) ++ "-" ++ @tagName(builtin.abi),
         .cpu = builtin.cpu.model.name,
-        .optimize = @tagName(builtin.mode),
+        .optimize = optimizeName(builtin.mode),
         .link_libc = true,
         .chunk_bytes = chunk_bytes,
         .suite = cfg.suite,

@@ -60,7 +60,7 @@ A dispatched host therefore runs the same kernel as a `-Dcpu=<model>` build.
 An unknown AVX-512 model gets `x86_64_v4`, which has no REP and no NT stores.
 That row cannot select REP on AMD, and it cannot start NT stores below the cache size.
 This is the most conservative table.
-The model numbers mirror the Zig 0.16 host detection (`lib/std/zig/system/x86.zig`, MIT).
+The model numbers mirror the Zig 0.17 host detection (`lib/std/zig/system/x86.zig`, MIT).
 `src/x86_64/cpuid.zig` contains the table and the synthetic-CPUID tests.
 
 The dispatcher does not read the CPUID stepping.
@@ -69,7 +69,7 @@ The NT thresholds describe the fleet instance sizes, as in the comptime builds.
 
 ## Build structure
 
-Zig 0.16 has no per-function target features (`docs/slop/fastmem-plan.md`, Facts).
+Zig 0.17 has no per-function target features (`docs/slop/fastmem-plan.md`, Facts).
 One compilation cannot contain baseline code and AVX2 code.
 Thus `build.zig` compiles each level as a separate object.
 
@@ -96,7 +96,7 @@ Two fastmem package copies in one executable therefore need different names.
 The id also makes the generated `fastmem_options` files of two copies differ.
 Without that, two identical options files share one cache path, and Zig rejects the compilation: "file exists in modules 'fastmem_options' and 'fastmem_options0'".
 
-`Module.addObject` propagates in Zig 0.16.
+`Module.addObject` propagates in Zig 0.17.
 `std.Build.Step.Compile` collects the link objects of every module in its module graph.
 Thus an executable that imports `b.dependency("fastmem", ...).module("fastmem")` links the objects.
 An object artifact (`zig build-obj`) merges them into its relocatable output.
@@ -156,7 +156,7 @@ jmpq   *%rax
 
 The first fleet version jumped through the pointer at every size.
 The G6 run 20260925T184717Z-p7-dispatch-g6 measured that at 0 to 16 bytes: copy against glibc went from 0.91 to 1.34 on c7i and from 0.85 to 1.53 on c8i.
-LLVM 21 does not fold the load into the jump (see "Zig 0.16 limitations").
+LLVM 21 does not fold the load into the jump (see "Zig 0.17 limitations").
 
 The model pointers select the internal entries with the `above128` suffix.
 These entries reuse the medium classes and large kernels, with `n > 128` as a precondition.
@@ -223,9 +223,8 @@ That step does these checks:
    It checks that fixed sizes 1 to 128 make no call and that 129 to 256 use the pointer.
    It checks that every `fastmem_x86_*` symbol is GLOBAL HIDDEN.
 2. The same script compares each level object with the comptime codegen probe of the same CPU.
-   The kernel functions and every function that they branch to must be instruction-identical on 0.16.
-   On 0.17 the identity comparison is skipped: the level object and the probe compile the same kernel source in different module contexts, so LLVM inlines `largeKernel` differently and only register allocation and inlining move.
-   The stub, trace, symbol, policy, and sensitivity checks still run on both versions.
+   The kernel functions and every function that they branch to must match up to register allocation: the level object and the probe compile the same kernel source in different module contexts, so LLVM inlines `largeKernel` differently and the instruction streams are not identical.
+   The stub, trace, symbol, policy, and sensitivity checks run alongside it.
    A negative check proves that two different levels differ.
    A table of the REP and NT use of each level, stated independently of `tuning.zig`, must match the large paths.
    No level uses REP for a forward overlap: `rep_fwd_gap_min` is null in every row.
@@ -489,7 +488,7 @@ The post-review probe also matches the pre-review `eec1dd7` probe on all five CP
 Zen 5 changes intentionally.
 No AWS instance was launched by this lane.
 
-## Zig 0.16 limitations
+## Zig 0.17 limitations
 
 Each item comes from a compiled experiment.
 

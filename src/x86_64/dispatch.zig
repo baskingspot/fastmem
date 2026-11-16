@@ -14,17 +14,12 @@
 //! atomics only make it defined.
 const std = @import("std");
 
-// Zig 0.17's `zig fmt` rewrites `@intFromEnum`/`@enumFromInt` to their
-// `@backingInt` forms, which Zig 0.16 cannot compile. Keep them out of the
-// formatter's reach.
-// zig fmt: off
 fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
-    return @intFromEnum(e);
+    return @backingInt(e);
 }
 fn enumFromInt(comptime E: type, raw: anytype) E {
-    return @enumFromInt(raw);
+    return @fromBackingInt(@intCast(raw));
 }
-// zig fmt: on
 
 const builtin = @import("builtin");
 const options = @import("fastmem_options");

@@ -1,13 +1,9 @@
 //! Exhaustive Linux guard-page checks through the public API.
 const std = @import("std");
 
-// Zig 0.17's `zig fmt` rewrites `@intFromEnum` to `@backingInt`, which Zig
-// 0.16 cannot compile. Keep the builtin out of the formatter's reach.
-// zig fmt: off
 fn enumToInt(e: anytype) @typeInfo(@TypeOf(e)).@"enum".tag_type {
-    return @intFromEnum(e);
+    return @backingInt(e);
 }
-// zig fmt: on
 const builtin = @import("builtin");
 const fastmem = @import("fastmem");
 const Guarded = @import("Guarded.zig");
@@ -70,6 +66,19 @@ comptime {
     }
 }
 
+/// The optimization-mode name that the JSON schema uses
+/// (`docs/slop/bench-design.md`, `bench/fastmem_bench/jsonl.py`). Zig 0.17
+/// renamed the `std.builtin.Optimize` tags to lowercase, so `@tagName` no
+/// longer produces it.
+fn optimizeName(mode: std.builtin.Optimize) []const u8 {
+    return switch (mode) {
+        .debug => "Debug",
+        .safe => "ReleaseSafe",
+        .fast => "ReleaseFast",
+        .small => "ReleaseSmall",
+    };
+}
+
 fn summary(status: []const u8, detail: []const u8, elapsed_ns: i96) void {
     var buffer: [2048]u8 = undefined;
     const c = @as(*volatile Case, &current).*;
@@ -87,7 +96,7 @@ fn summary(status: []const u8, detail: []const u8, elapsed_ns: i96) void {
         .elapsed_ns = elapsed_ns,
         .cpu = builtin.cpu.model.name,
         .max_size = max_size,
-        .optimize = @tagName(builtin.mode),
+        .optimize = optimizeName(builtin.mode),
         .set_available = @hasDecl(fastmem, "set"),
         .link_libc = builtin.link_libc,
         .impl = fastmem.impl,

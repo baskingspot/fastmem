@@ -11,15 +11,10 @@
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
-      # imports and inputsFrom below mirror each other, including the
-      # toolchain version. Both versions build; the default is the current
-      # stable, and `zig-old` is the previous one for the CI compatibility
-      # lane and for local checks.
       imports = with inputs.baskingspot.flakeModules; [
         base
         docs
         terraform
-        zig."0.16"
         zig."0.17"
       ];
 
@@ -50,7 +45,7 @@
             # User-mode qemu runs cross-built x86 test binaries on the arm
             # dev host (AVX2 only: it lacks AVX-512). Linux only.
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.qemu-user ]
-            ++ [ config.packages."ziglint-0-16" ];
+            ++ [ config.packages."ziglint-0-17" ];
           env = {
             # Keep uv on the nix interpreter; never download a Python.
             UV_PYTHON = "${pkgs.python315}/bin/python3";
@@ -65,17 +60,6 @@
               config.devShells.docs
               config.devShells.terraform
               config.devShells."zig-0-17"
-            ];
-            packages = project;
-            inherit env;
-          };
-
-          devShells.zig-old = pkgs.mkShell {
-            inputsFrom = [
-              config.devShells.base
-              config.devShells.docs
-              config.devShells.terraform
-              config.devShells."zig-0-16"
             ];
             packages = project;
             inherit env;

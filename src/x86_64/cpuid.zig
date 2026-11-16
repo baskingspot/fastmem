@@ -2,7 +2,7 @@
 //! values. This file is pure logic: it compiles and tests on every host,
 //! with synthetic register values. dispatch.zig reads the real registers.
 //!
-//! The model table mirrors the Zig 0.16 host detection
+//! The model table mirrors the Zig 0.17 host detection
 //! (lib/std/zig/system/x86.zig, MIT) for the models that fastmem tunes.
 //! A level is the -Dcpu of one kernel object. A host runs the object that
 //! a comptime build for its own model selects in tuning.zig.

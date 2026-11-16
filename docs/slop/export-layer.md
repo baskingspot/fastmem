@@ -98,7 +98,7 @@ On x86_64, the dispatch symbols already carry the instance id (`docs/slop/runtim
 ## Scope and limits
 
 The API accepts aarch64 and x86_64 ELF targets with the LLVM backend.
-The binary suite tests Linux with Zig 0.16.0.
+The binary suite tests Linux with Zig 0.17.0.
 Other object formats and non-LLVM backends receive a compile error.
 
 The target CPU selects the kernel at compile time, with one exception.
@@ -115,7 +115,7 @@ It does not force every builtin through a function.
 The API refuses non-LLVM backends because their symbol visibility is not part of this guarantee.
 Debug with LLVM passes the linked binary checks and the runtime consumer tests on both architectures.
 
-The separate `-fno-llvm` Debug probes establish this actual Zig 0.16 behavior for runtime byte lengths:
+The separate `-fno-llvm` Debug probes establish this actual Zig 0.17 behavior for runtime byte lengths:
 
 | Backend | `@memcpy` | `@memmove` | `@memset` |
 |---|---|---|---|
