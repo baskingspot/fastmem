@@ -22,6 +22,11 @@ const Vec32 = @Vector(32, u8);
 pub const max_inline = 64;
 
 inline fn load(comptime T: type, p: [*]const u8) T {
+    // The round-trip needs the check off. @ptrFromInt asserts a non-null
+    // pointer in safety-checked builds, and that branch stops LLVM from
+    // hoisting the loads out of the size ladder: ReleaseSafe grew every
+    // inline class. A source pointer is never null, so the check is noise.
+    @setRuntimeSafety(false);
     // Through the integer, not @ptrCast: a comptime-known pointer (a string
     // literal source) stays comptime-known through @ptrCast, so `q.*` becomes
     // a comptime dereference of a @Vector, which has no defined layout and is
