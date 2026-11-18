@@ -164,6 +164,7 @@ comptime {
 }
 
 test {
+    _ = @import("tests/constant_source.zig");
     _ = @import("tests/fuzz.zig");
     _ = @import("x86_64/cpuid.zig");
     if (on_x86) _ = @import("x86_64/tests.zig");
