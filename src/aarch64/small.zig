@@ -22,7 +22,11 @@ const Vec32 = @Vector(32, u8);
 pub const max_inline = 64;
 
 inline fn load(comptime T: type, p: [*]const u8) T {
-    const q: *align(1) const T = @ptrCast(p);
+    // Through the integer, not @ptrCast: a comptime-known pointer (a string
+    // literal source) stays comptime-known through @ptrCast, so `q.*` becomes
+    // a comptime dereference of a @Vector, which has no defined layout and is
+    // rejected (issue #3). The round-trip always yields a run-time pointer.
+    const q: *align(1) const T = @ptrFromInt(@intFromPtr(p));
     return q.*;
 }
 

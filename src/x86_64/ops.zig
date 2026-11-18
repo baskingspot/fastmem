@@ -18,7 +18,12 @@ extern fn @"llvm.masked.store.v64i8.p0"(
 ) void;
 
 pub inline fn load(comptime T: type, src: [*]const u8) T {
-    return @as(*align(1) const T, @ptrCast(src)).*;
+    // Through the integer, not @ptrCast: a comptime-known pointer (a string
+    // literal source) stays comptime-known through @ptrCast, so the load
+    // becomes a comptime dereference of a @Vector, which has no defined
+    // layout and is rejected (issue #3). The round-trip yields a run-time
+    // pointer.
+    return @as(*align(1) const T, @ptrFromInt(@intFromPtr(src))).*;
 }
 pub inline fn store(comptime T: type, dst: [*]u8, value: T) void {
     @as(*align(1) T, @ptrCast(dst)).* = value;
